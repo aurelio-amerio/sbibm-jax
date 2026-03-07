@@ -1,5 +1,6 @@
 """SIR epidemic model task (ODE-based)."""
 
+import math
 from pathlib import Path
 from typing import List, Optional
 
@@ -74,8 +75,6 @@ class SIR(Task):
             observation_seeds=observation_seeds,
         )
 
-        # Prior: LogNormal (matching reference sbibm)
-        import math
         self.prior_params = {
             "loc": jnp.array([math.log(0.4), math.log(0.125)]),
             "scale": jnp.array([0.5, 0.2]),
@@ -130,35 +129,29 @@ class SIR(Task):
                 stepsize_controller=stepsize_controller,
                 max_steps=16**4,
             )
-            return sol.ys  # (num_timepoints, 3)
+            return sol.ys
 
         def simulator(key, parameters):
             num_samples = parameters.shape[0]
 
-            # vmap over parameters
-            sol = jax.vmap(solve_single)(parameters)  # (num_samples, T, 3)
+            sol = jax.vmap(solve_single)(parameters)
 
-            # Extract I compartment
-            I_vals = sol[:, :, 1]  # (num_samples, T)
+            I_vals = sol[:, :, 1]
 
-            # Check for NaN
             has_nan = jnp.isnan(I_vals).any(axis=1)
 
             if summary is None:
                 return I_vals
 
             elif summary == "subsample":
-                # Subsample every 17th timepoint
-                I_sub = I_vals[:, ::17]  # (num_samples, ~10)
+                I_sub = I_vals[:, ::17]
 
-                # Binomial noise
                 probs = jnp.clip(I_sub / N, 1e-10, 1 - 1e-10)
                 data = dist.Independent(
                     dist.Binomial(total_count=total_count, probs=probs),
                     1,
                 ).sample(key)
 
-                # Set NaN rows to NaN
                 data = jnp.where(has_nan[:, None], jnp.nan, data)
                 return data
 

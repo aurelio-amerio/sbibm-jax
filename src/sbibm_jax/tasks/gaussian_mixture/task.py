@@ -68,13 +68,11 @@ class GaussianMixture(Task):
             num_samples = parameters.shape[0]
             k1, k2 = jax.random.split(key)
 
-            # Sample mixture component for each sample
             idx = dist.Categorical(probs=mixture_weights).sample(
                 k1, (num_samples,)
-            )  # (num_samples,)
+            )
 
-            # Select loc factor and scale per sample
-            loc = mixture_locs_factor[idx, None] * parameters  # (num_samples, dim)
+            loc = mixture_locs_factor[idx, None] * parameters
             scale = mixture_scales[idx, None] * jnp.ones_like(parameters)
 
             return dist.Independent(

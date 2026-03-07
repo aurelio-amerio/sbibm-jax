@@ -2474,7 +2474,6 @@ dependencies = [
     { name = "numpy" },
     { name = "numpyro" },
     { name = "pandas" },
-    { name = "pyro-ppl" },
 ]
 
 [package.dev-dependencies]
@@ -2521,7 +2520,6 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.4.2" },
     { name = "numpyro", specifier = ">=0.18.0" },
     { name = "pandas", specifier = ">=2.0.0" },
-    { name = "pyro-ppl", specifier = ">=1.9.1" },
 ]
 
 [package.metadata.requires-dev]
@@ -2530,7 +2528,7 @@ dev = [
     { name = "genbadge", extras = ["all"] },
     { name = "junitparser" },
     { name = "notebook", specifier = ">=7.5.4" },
-    { name = "pyro-ppl" },
+    { name = "pyro-ppl", specifier = ">=1.9.1" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pytest-env" },
@@ -2550,7 +2548,7 @@ test = [
     { name = "pytest-xdist" },
 ]
 torch = [
-    { name = "pyro-ppl" },
+    { name = "pyro-ppl", specifier = ">=1.9.1" },
     { name = "torch", specifier = ">=2.9.1", index = "https://download.pytorch.org/whl/cpu" },
 ]
 

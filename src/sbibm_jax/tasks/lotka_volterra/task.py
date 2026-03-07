@@ -59,7 +59,7 @@ class LotkaVolterra(Task):
             observation_seeds=observation_seeds,
         )
 
-        # Prior: LogNormal
+
         mu_p1 = -0.125
         mu_p2 = -3.0
         sigma_p = 0.5
@@ -94,17 +94,15 @@ class LotkaVolterra(Task):
         days = self.days
         saveat_interval = self.saveat
         summary = self.summary
-        dim_data = self.dim_data
-        dim_data_raw = self.dim_data_raw
 
-        # Pre-compute save times
+
+
         ts = jnp.arange(0, days + saveat_interval, saveat_interval)
         solver = diffrax.Tsit5()
         dt0 = 0.01
         stepsize_controller = diffrax.PIDController(rtol=1e-5, atol=1e-5)
 
         def solve_single(params):
-            """Solve ODE for a single parameter vector."""
             term = diffrax.ODETerm(_lotka_volterra_vector_field)
             sol = diffrax.diffeqsolve(
                 term,
@@ -118,28 +116,23 @@ class LotkaVolterra(Task):
                 stepsize_controller=stepsize_controller,
                 max_steps=16**4,
             )
-            return sol.ys  # (num_timepoints, 2)
+            return sol.ys
 
         def simulator(key, parameters):
             num_samples = parameters.shape[0]
 
-            # vmap over parameters for batched ODE solving
-            us = jax.vmap(solve_single)(parameters)  # (num_samples, T, 2)
+            us = jax.vmap(solve_single)(parameters)
 
-            # Transpose to (num_samples, 2, T) to match original format
             us = jnp.transpose(us, (0, 2, 1))
 
-            # Check for NaN
             has_nan = jnp.isnan(us.reshape(num_samples, -1)).any(axis=1)
 
             if summary is None:
                 return us.reshape(num_samples, -1)
 
             elif summary == "subsample":
-                # Subsample every 21st timepoint, flatten
                 us_sub = us[:, :, ::21].reshape(num_samples, -1)
 
-                # Clamp and apply LogNormal noise
                 us_clamped = jnp.clip(us_sub, 1e-10, 10000.0)
 
                 data = dist.Independent(
@@ -150,7 +143,6 @@ class LotkaVolterra(Task):
                     1,
                 ).sample(key)
 
-                # Set NaN rows to NaN
                 data = jnp.where(has_nan[:, None], jnp.nan, data)
                 return data
 

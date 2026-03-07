@@ -1,7 +1,7 @@
 """Bernoulli GLM task."""
 
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Optional
 
 import jax
 import jax.numpy as jnp
@@ -51,7 +51,7 @@ class BernoulliGLM(Task):
             "seed": 42,
         }
 
-        # Prior on offset and filter
+
         M = self.dim_parameters - 1
         D = jnp.diag(jnp.ones(M)) - jnp.diag(jnp.ones(M - 1), -1)
         F = D @ D + jnp.diag(1.0 * jnp.arange(M) / M) ** 0.5
@@ -68,7 +68,7 @@ class BernoulliGLM(Task):
             precision_matrix=self.prior_params["precision_matrix"],
         )
 
-        # Load design matrix and stimulus (stored as .npz or .pt)
+
         self._design_matrix = None
         self._stimulus_I = None
 
@@ -77,7 +77,7 @@ class BernoulliGLM(Task):
         if self._design_matrix is not None:
             return self._design_matrix
 
-        # Try .npz first, fall back to generating from stimulus
+
         npz_path = self.path / "files" / "design_matrix.npz"
         pt_path = self.path / "files" / "design_matrix.pt"
 
@@ -91,7 +91,7 @@ class BernoulliGLM(Task):
                 torch.load(pt_path, weights_only=True).numpy()
             )
         else:
-            # Generate from scratch
+
             self._design_matrix = self._generate_design_matrix()
 
         return self._design_matrix
@@ -134,7 +134,7 @@ class BernoulliGLM(Task):
         for j in range(self.dim_parameters - 1):
             design[j:, j] = stimulus_np[:n_timesteps - j]
 
-        # Prepend column of ones for offset
+
         design_with_offset = np.concatenate(
             [np.ones((n_timesteps, 1), dtype=np.float32), design], axis=1
         )
@@ -160,27 +160,11 @@ class BernoulliGLM(Task):
                 z = jax.nn.sigmoid(psi)
                 y = (jax.random.uniform(key, shape=z.shape) < z).astype(jnp.float32)
 
-                # Summary statistics
+
                 num_spikes = jnp.sum(y).reshape(1)
 
-                # STA: cross-correlation of spikes with stimulus
-                # Equivalent to conv1d with padding=8, take last 9 elements
-                sta = jnp.correlate(y, stimulus_I, mode="full")
-                # The correlate output has length len(y) + len(stimulus_I) - 1
-                # We want the equivalent of conv1d(..., padding=8).squeeze()[-9:]
-                # In the original: padding=8 on a signal of length 100 with kernel 100
-                # gives output of length 100+2*8-100+1 = 17, then take [-9:]
-                # Actually the original uses F.conv1d with padding=8
-                # which is 1D correlation. Let's replicate more carefully.
-                # F.conv1d(y(1,1,100), stim(1,1,100), padding=8) -> (1,1,109)
-                # .squeeze()[-9:] -> last 9 of 109 = indices 100:109
-                # In numpy correlate 'full' mode: output length = 100+100-1 = 199
-                # conv1d is actually cross-correlation in pytorch
-                # F.conv1d(input, weight, padding=8):
-                #   output[i] = sum_k input[i+k] * weight[k] for valid after padding
-                # This is equivalent to: pad y with 8 zeros on each side -> (116,)
-                # then correlate with stimulus_I (100,) -> output length = 116-100+1 = 17
-                # take [-9:] = indices 8:17
+                # STA (spike-triggered average)
+                # Equivalent to F.conv1d(y, stimulus_I, padding=8).squeeze()[-9:]
 
                 y_padded = jnp.pad(y, (8, 8))
                 conv_out = jnp.array([

@@ -15,7 +15,7 @@ dependencies = [
 
 [dependency-groups]
 torch = [
-    pyro-ppl>=1.9.1",
+    "pyro-ppl>=1.9.1",
     "torch>=2.9.1",
 ]
 lint = [

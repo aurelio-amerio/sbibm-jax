@@ -62,7 +62,6 @@ class SLCP(Task):
             1,
         )
 
-        # Lazily generated noise distribution parameters for distractors
         self._noise_dist = None
         self._permutation_idx = None
 
@@ -85,13 +84,12 @@ class SLCP(Task):
 
             m = jnp.stack(
                 [parameters[:, 0], parameters[:, 1]], axis=1
-            )  # (num_samples, 2)
+            )
 
             s1 = parameters[:, 2] ** 2
             s2 = parameters[:, 3] ** 2
             rho = jnp.tanh(parameters[:, 4])
 
-            # Build covariance matrices
             eps = 1e-6
             S = jnp.zeros((num_samples, 2, 2))
             S = S.at[:, 0, 0].set(s1**2 + eps)
@@ -99,8 +97,6 @@ class SLCP(Task):
             S = S.at[:, 1, 0].set(rho * s1 * s2)
             S = S.at[:, 1, 1].set(s2**2 + eps)
 
-            # Sample from MVN for each data point
-            # Expand m and S for num_data repetitions
             k1, k2 = jax.random.split(key)
             data_dist = dist.MultivariateNormal(
                 loc=jnp.broadcast_to(m[:, None, :], (num_samples, num_data, 2)),
@@ -108,7 +104,7 @@ class SLCP(Task):
                     S[:, None, :, :], (num_samples, num_data, 2, 2)
                 ),
             )
-            data = data_dist.sample(k1)  # (num_samples, num_data, 2)
+            data = data_dist.sample(k1)
 
             if not distractors:
                 return data.reshape(num_samples, -1)
@@ -144,10 +140,7 @@ class SLCP(Task):
             raise NotImplementedError("Unflatten not supported for distractors variant")
 
     def _get_noise_dist(self):
-        """Generate or return cached noise distribution for distractors.
-
-        Recreates the same noise GMM as the original sbibm using seed 42.
-        """
+        """Generate or return cached noise distribution for distractors."""
         if self._noise_dist is not None:
             return self._noise_dist, self._permutation_idx
 
@@ -167,20 +160,14 @@ class SLCP(Task):
         ]
         scale_tril = jnp.array(3 * np.array(cholesky_factors))
 
-        # Build mixture: uniform weights, MultivariateNormal components
-        # Note: original uses MultivariateStudentT(df=2), but numpyro
-        # doesn't have MixtureSameFamily with StudentT directly.
-        # We use MultivariateNormal as an approximation, or implement
-        # the sampling manually.
         mix = dist.Categorical(probs=jnp.ones(n_noise_comps) / n_noise_comps)
-        # For the noise distribution, we sample component index then sample from it
         self._noise_mix = mix
         self._noise_locs = loc
         self._noise_scale_tril = scale_tril
 
         permutation_idx = jnp.array(rng.permutation(noise_dim + 8))
 
-        # Create a simple callable noise distribution
+
         class NoiseDist:
             def __init__(self, mix, locs, scale_tril):
                 self.mix = mix
