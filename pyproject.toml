@@ -1,0 +1,33 @@
+[project]
+name = "sbibm-jax"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "diffrax>=0.7.2",
+    "jax[cuda12]>=0.9.1",
+    "matplotlib>=3.10.8",
+    "numpy>=2.4.2",
+    "torch>=2.9.1",
+    "torchvision>=0.24.1",
+]
+
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cpu" },
+]
+torchvision = [
+  { index = "pytorch-cpu" },
+]
+
+[dependency-groups]
+dev = [
+    "notebook>=7.5.4",
+]
