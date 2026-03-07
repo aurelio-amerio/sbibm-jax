@@ -13,10 +13,9 @@ dependencies = [
     "pandas>=2.0.0",
 ]
 
-
 [dependency-groups]
 torch = [
-    "pytest>=8.0.0",
+    pyro-ppl>=1.9.1",
     "torch>=2.9.1",
 ]
 lint = [
@@ -31,34 +30,13 @@ test = [
     "genbadge[all]",
     "junitparser",
 ]
-docs = [
-    "jupytext",
-    "pandoc",
-    "pydata-sphinx-theme",
-    "sphinx",
-    "myst-nb",
-    "astroid>=3,<5", # fix for sphinx.autoapi and read the docs, should be reverted at a later date - see issue #2125
-    "numpydoc",
-    "linkify-it-py", # for link shortening
-    "sphinxext-rediraffe",
-    # TODO: unpin sphinx-sitemap once a solution is offered for https://github.com/jdillard/sphinx-sitemap/issues/109
-    "sphinx-sitemap<2.7.0",
-    "sphinx-autoapi>=3.0.0",
-    "sphinx-copybutton",
-    "sphinx-design",
-    "sphinx-togglebutton",
-    "sphinxcontrib-mermaid",
-    "sphinx-favicon>=1.0.1",
-]
-
 notebooks = [
     "notebook>=7.5.4",
 ]
 dev = [
     {include-group = "lint"},
-    {include-group = "torch"},
     {include-group = "test"},
-    {include-group = "docs"},
+    {include-group = "torch"},
     {include-group = "notebooks"},
 ]
 
@@ -69,7 +47,7 @@ build-backend = "uv_build"
 [tool.pytest.ini_options]
 addopts = "-n 2"
 env = [
-    "JAX_PLATFORMS=cpu"
+    "JAX_PLATFORMS=cpu",
 ]
 testpaths = [
     "tests",
@@ -79,7 +57,6 @@ markers = [
     "experimental: marks tests as experimental",
 ]
 
-
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
@@ -87,5 +64,5 @@ explicit = true
 
 [tool.uv.sources]
 torch = [
-  { index = "pytorch-cpu" },
+    { index = "pytorch-cpu" },
 ]
