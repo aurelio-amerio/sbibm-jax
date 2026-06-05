@@ -388,11 +388,16 @@ def run_mcmc(petab_problem, data_df=None, n_optimization_starts=0, n_chains=10, 
         options=dict(show_progress=verbose)
     )
 
+    # When no optimization was run, warm_start=0 tells pypesto to draw x0
+    # from the prior (avoids TypeError in pypesto>=0.6 when result is None).
+    _warm_start = 1.0 if n_optimization_starts > 0 else 0.0
+
     _result = sample.sample(
         problem=_pypesto_problem,
         n_samples=n_samples,
         sampler=_sampler,
         result=_result,
+        warm_start=_warm_start,
     )
     sample.geweke_test(_result)
 
