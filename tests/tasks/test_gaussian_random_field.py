@@ -103,3 +103,39 @@ class TestSimulator:
         sim = task.get_simulator(k2, max_calls=10)
         with pytest.raises(SimulationBudgetExceeded):
             sim(k3, theta)
+
+
+def _radial_power_spectrum(images, N):
+    """Mean |FFT|^2 over samples, radially binned by integer radius.
+
+    Returns (k_base, power) over radii 1..N//2-1, where k_base is the
+    d=1 grid frequency magnitude (so power ~ k_base**(-alpha)).
+    """
+    F = np.fft.fft2(np.asarray(images), axes=(-2, -1))
+    power = np.mean(np.abs(F) ** 2, axis=0)  # (N, N)
+    k0 = np.fft.fftfreq(N, d=1.0)
+    kx, ky = np.meshgrid(k0, k0, indexing="ij")
+    knorm = np.sqrt(kx**2 + ky**2)
+    radius = np.round(knorm * N).astype(int)
+    ks, ps = [], []
+    for r in range(1, N // 2):
+        mask = radius == r
+        if mask.sum() == 0:
+            continue
+        ks.append(r / N)
+        ps.append(power[mask].mean())
+    return np.array(ks), np.array(ps)
+
+
+class TestPowerSpectrum:
+    def test_slope_matches_alpha(self):
+        N = 32
+        alpha = 3.0
+        task = GaussianRandomField(field_size=N)
+        theta = jnp.tile(jnp.array([0.0, alpha]), (2000, 1))
+        sim = task.get_simulator(jax.random.PRNGKey(7))
+        images = task.unflatten_data(sim(jax.random.PRNGKey(8), theta))
+
+        ks, ps = _radial_power_spectrum(images, N)
+        slope = np.polyfit(np.log(ks), np.log(ps), 1)[0]
+        assert slope == pytest.approx(-alpha, abs=0.3)
