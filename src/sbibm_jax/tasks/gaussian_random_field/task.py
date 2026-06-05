@@ -52,7 +52,39 @@ class GaussianRandomField(Task):
     def get_simulator(
         self, key: jax.random.PRNGKey, max_calls: Optional[int] = None
     ) -> Simulator:
-        raise NotImplementedError
+        N = self.field_size
+
+        # Base k-grid (d=1); knorm scales linearly with (|alpha| + 1e-7).
+        k0 = jnp.fft.fftfreq(N, d=1.0)
+        kx, ky = jnp.meshgrid(k0, k0, indexing="ij")
+        knorm_base = jnp.sqrt(kx**2 + ky**2)
+
+        def generate_single(skey, params):
+            log_std = params[0]
+            alpha = params[1]
+            knorm = knorm_base * (jnp.abs(alpha) + 1e-7)
+
+            ka, kb = jax.random.split(skey)
+            a = jax.random.normal(ka, (N, N))
+            b = jax.random.normal(kb, (N, N))
+            fftfield = a + 1j * b
+
+            # sqrt(P(k)) = knorm**(-alpha/2) * exp(log_std); DC mode -> 0.
+            safe_knorm = jnp.where(knorm > 0, knorm, 1.0)
+            power_k = jnp.where(
+                knorm > 0,
+                safe_knorm ** (-alpha / 2.0) * jnp.exp(log_std),
+                0.0,
+            )
+            field = jnp.real(jnp.fft.ifftn(fftfield * power_k))
+            return field
+
+        def simulator(key, parameters):
+            num_samples = parameters.shape[0]
+            keys = jax.random.split(key, num_samples)
+            return jax.vmap(generate_single)(keys, parameters)
+
+        return Simulator(task=self, simulator=simulator, max_calls=max_calls)
 
     def _sample_reference_posterior(
         self,
