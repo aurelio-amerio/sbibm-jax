@@ -181,3 +181,23 @@ class TestReferenceSampler:
         ks, ps = _radial_power_spectrum(images, N)
         slope = np.polyfit(np.log(ks), np.log(ps), 1)[0]
         assert slope == pytest.approx(-3.0, abs=0.3)
+
+
+class TestRegistry:
+    def test_get_task_returns_instance(self):
+        from sbibm_jax import get_task
+
+        task = get_task("gaussian_random_field")
+        assert isinstance(task, GaussianRandomField)
+        assert task.dim_data == 32 * 32  # default field_size=32
+
+    def test_get_task_passes_kwargs(self):
+        from sbibm_jax import get_task
+
+        task = get_task("gaussian_random_field", field_size=16)
+        assert task.dim_data == 16 * 16
+
+    def test_available_tasks_includes_grf(self):
+        from sbibm_jax import get_available_tasks
+
+        assert "gaussian_random_field" in get_available_tasks()

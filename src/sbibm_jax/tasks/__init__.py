@@ -55,6 +55,10 @@ def get_task(task_name: str, *args: Any, **kwargs: Any) -> Task:
         from sbibm_jax.tasks.sir.task import SIR
         return SIR(*args, **kwargs)
 
+    elif task_name == "gaussian_random_field":
+        from sbibm_jax.tasks.gaussian_random_field.task import GaussianRandomField
+        return GaussianRandomField(*args, **kwargs)
+
     else:
         raise NotImplementedError(f"Task '{task_name}' not found.")
 
