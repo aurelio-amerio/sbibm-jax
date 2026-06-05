@@ -68,7 +68,7 @@ def load_problem(problem_name="Beer_MolBioSystems2014", create_amici_model=True)
 
         model = factory.create_model(verbose=False)  # noqa: F841
         amici_predictor = factory.create_predictor()
-        amici_predictor.amici_objective.amici_solver.setAbsoluteTolerance(1e-8)
+        amici_predictor.amici_objective.amici_solver.set_absolute_tolerance(1e-8)
     else:
         # load problem
         class DummySimulator:
@@ -170,9 +170,9 @@ def create_pypesto_problem(petab_problem, measurement_df=None):
     _pypesto_problem.startpoint_method = pypesto.startpoint.PriorStartpoints(check_fval=True, check_grad=True)
 
     if isinstance(_pypesto_problem.objective, pypesto.objective.AggregatedObjective):
-        _pypesto_problem.objective._objectives[0].amici_solver.setAbsoluteTolerance(1e-8)
+        _pypesto_problem.objective._objectives[0].amici_solver.set_absolute_tolerance(1e-8)
     else:
-        _pypesto_problem.objective.amici_solver.setAbsoluteTolerance(1e-8)
+        _pypesto_problem.objective.amici_solver.set_absolute_tolerance(1e-8)
 
     if not measurement_df is None:  # noqa: E714
         return _pypesto_problem, _petab_problem
