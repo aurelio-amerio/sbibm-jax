@@ -26,49 +26,80 @@
 
 ---
 
-## Task 1: Add the `pypesto` optional-dependency extra — THEN STOP
+## Task 1: Add the `pypesto` optional-dependency extra — ✅ DONE
+
+> **STATUS (2026-06-05): COMPLETE.** Committed on branch
+> `feat/beer-molbiosystems-petab-task`. The install was verified end-to-end:
+> `uv sync --extra pypesto` succeeded, the Beer problem loads, and the AMICI
+> model compiles. **Important deviation from the original spec below** — the
+> naive package list did not resolve, so the extra was reworked.
 
 **Files:**
-- Modify: `pyproject.toml`
+- Modify: `pyproject.toml` ✅ (also committed `uv.lock` so the lock matches)
 
-- [ ] **Step 1: Add the optional-dependencies table**
+- [x] **Step 1: Add the optional-dependencies table** — done, but NOT as
+  originally written. Three problems surfaced during the real install:
+  1. `benchmark-models-petab` is **not on PyPI** → must come from git via
+     `[tool.uv.sources]`.
+  2. The original `pypesto` (git `develop`) + `amici==0.34.2` combo is
+     **internally inconsistent**: current pypesto (release *and* develop)
+     imports `amici.importers.petab.v1`, which requires **amici >= 1.0.0**
+     (amici 0.34.2 only has the old `amici.petab` layout). Decision (user
+     approved): use the **latest published** mutually-consistent set instead of
+     the moving `develop` branch.
+  3. `petab`'s linter (`np.issubdtype` on column dtypes) breaks on **pandas
+     3.0**'s default `StringDtype` → pin `pandas<3.0`.
 
-Insert a `[project.optional-dependencies]` table immediately after the `dependencies = [...]` array (after line 15, before `[dependency-groups]`):
+  The actually-committed extra + source:
 
 ```toml
 [project.optional-dependencies]
 pypesto = [
-    "pypesto",
+    "pypesto[amici]>=0.6.0",   # PyPI; pulls amici 1.0.x
     "petab",
-    "amici",
-    "benchmark-models-petab",
+    "benchmark-models-petab",  # git source below (not on PyPI)
     "joblib",
     "scipy",
+    "pandas<3.0",              # petab linter vs pandas 3.0 StringDtype
 ]
+
+# merged into the existing [tool.uv.sources] table (alongside torch):
+[tool.uv.sources]
+benchmark-models-petab = { git = "https://github.com/Benchmarking-Initiative/Benchmark-Models-PEtab.git", subdirectory = "src/python", rev = "master" }
 ```
 
-- [ ] **Step 2: Commit**
+  Resolved/verified versions: **pypesto 0.6.0, amici 1.0.1, petab 0.7.0,
+  pandas 2.3.3** (Python 3.12).
 
-```bash
-git add pyproject.toml
-git commit -m "build: add optional pypesto extra for beer_molbiosystems task"
-```
+- [x] **Step 2: Commit** — done (pyproject.toml + uv.lock).
 
-- [ ] **Step 3: HARD STOP — hand off to the user for manual install**
+- [x] **Step 3: HARD STOP for manual install** — RESOLVED. The user ran
+  `uv sync --extra pypesto`; the AMICI model compiled successfully. Proceed.
 
-The implementing agent runs in a sandbox and **cannot install packages or compile the AMICI C++ model**. Stop here and tell the user:
-
-> "The `pypesto` extra is added and committed. Please install it manually — this triggers a one-time AMICI compile of the Beer model (takes minutes and needs a working C/C++ compiler, SWIG, and BLAS):
-> ```
-> uv sync --extra pypesto
-> ```
-> Let me know once it finishes (and report any compile errors) so I can continue with Task 2."
-
-Do not proceed to Task 2 until the user confirms the install succeeded.
+> ⚠️ **Carry-forward for Task 3 (amici 1.0 API drift):** amici 1.0 **removed**
+> `amici.swig_wrappers`. The verbatim helpers `load_problem` and
+> `run_mcmc_single` call `amici.swig_wrappers.logger.setLevel(...)` — this line
+> must be adapted to the amici 1.0 logging API (e.g.
+> `logging.getLogger("amici").setLevel(...)`) instead of copied byte-for-byte.
+> This is the one place the "verbatim" instruction cannot be followed literally.
 
 ---
 
-## Task 2: Introspect the Beer problem to fix the dimension constants
+## Task 2: Introspect the Beer problem to fix the dimension constants — ✅ DONE
+
+> **STATUS (2026-06-05): COMPLETE.** The introspection snippet was already run
+> (as part of verifying the Task 1 install). Record these literals for Task 4:
+>
+> | Constant | Value |
+> | --- | --- |
+> | `DIM_PARAMETERS` | **72** |
+> | `N_TIMEPOINTS` | **714** |
+> | `N_SERIES` | **38** |
+> | `DIM_DATA` | **27132** (= 714 × 38) |
+>
+> `FREE_NAMES` = the 72 free parameters (`Bacmax_*`, `beta_*`, `tau_*` per
+> type/experiment, plus `init_Bac`, `kdegi_*`, `kdim_*`, `ksyn_*`, `sd_Bacnorm`,
+> `sd_IndconcNormRange`). Re-run the snippet below if you need the full list.
 
 The task must construct **without** the extra (for registry discovery), so `dim_parameters` and `dim_data` must be hardcoded literals. This task obtains those literals by loading the problem once. **Requires the extra installed (Task 1).** May need to run outside the sandbox.
 
@@ -120,6 +151,15 @@ Write the printed `DIM_PARAMETERS`, `N_TIMEPOINTS`, `N_SERIES`, `DIM_DATA` value
 ## Task 3: Port the pypesto/AMICI helpers verbatim
 
 Copy the SBI-relevant functions from the case study into a task-local module, stripping the bayesflow/metrics code. `diffusion-experiments/` is untracked and not importable, so the code is copied in.
+
+> ⚠️ **amici 1.0 API drift (must-fix during the verbatim copy):** amici 1.0
+> removed `amici.swig_wrappers`. Any copied line of the form
+> `amici.swig_wrappers.logger.setLevel(logging.CRITICAL)` (present in
+> `load_problem` and `run_mcmc_single`) must be changed to use the amici 1.0
+> logging API, e.g. `logging.getLogger("amici").setLevel(logging.CRITICAL)`.
+> Everything else is copied verbatim; verify with the Step 5 import check and a
+> quick `load_problem("Beer_MolBioSystems2014")` smoke run, and fix any other
+> amici-1.0 attribute errors the same minimal way (document each in the commit).
 
 **Files:**
 - Create: `src/sbibm_jax/tasks/beer_molbiosystems/__init__.py`
@@ -209,7 +249,7 @@ If flake8 flags unused imports that are genuinely unused after the verbatim copy
 - Create: `src/sbibm_jax/tasks/beer_molbiosystems/task.py`
 - Test: `tests/tasks/test_petab.py`
 
-Substitute the four integers recorded in Task 2 for `DIM_PARAMETERS`, `N_TIMEPOINTS`, `N_SERIES`, `DIM_DATA` below.
+Substitute the four integers recorded in Task 2 for `DIM_PARAMETERS`, `N_TIMEPOINTS`, `N_SERIES`, `DIM_DATA` below. **Values (from Task 2):** `DIM_PARAMETERS = 72`, `N_TIMEPOINTS = 714`, `N_SERIES = 38`, `DIM_DATA = 27132`.
 
 - [ ] **Step 1: Write the failing construction + prior tests**
 
