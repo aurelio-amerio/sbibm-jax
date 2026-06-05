@@ -63,6 +63,10 @@ def get_task(task_name: str, *args: Any, **kwargs: Any) -> Task:
         )
         return GaussianRandomField(*args, **kwargs)
 
+    elif task_name == "beer_molbiosystems":
+        from sbibm_jax.tasks.beer_molbiosystems.task import BeerMolBioSystems
+        return BeerMolBioSystems(*args, **kwargs)
+
     else:
         raise NotImplementedError(f"Task '{task_name}' not found.")
 

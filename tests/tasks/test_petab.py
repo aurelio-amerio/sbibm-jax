@@ -100,3 +100,16 @@ class TestReferencePosterior:
             n_chains=2,
         )
         assert samples.shape == (8, task.dim_parameters)
+
+
+class TestRegistry:
+    def test_get_task_returns_instance(self):
+        from sbibm_jax import get_task
+
+        task = get_task("beer_molbiosystems")
+        assert isinstance(task, BeerMolBioSystems)
+
+    def test_available_tasks_includes_beer(self):
+        from sbibm_jax import get_available_tasks
+
+        assert "beer_molbiosystems" in get_available_tasks()
