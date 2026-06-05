@@ -20,7 +20,9 @@ def get_task(task_name: str, *args: Any, **kwargs: Any) -> Task:
         return GaussianLinear(*args, **kwargs)
 
     elif task_name == "gaussian_linear_uniform":
-        from sbibm_jax.tasks.gaussian_linear_uniform.task import GaussianLinearUniform
+        from sbibm_jax.tasks.gaussian_linear_uniform.task import (
+            GaussianLinearUniform,
+        )
         return GaussianLinearUniform(*args, **kwargs)
 
     elif task_name == "gaussian_mixture":
@@ -56,7 +58,9 @@ def get_task(task_name: str, *args: Any, **kwargs: Any) -> Task:
         return SIR(*args, **kwargs)
 
     elif task_name == "gaussian_random_field":
-        from sbibm_jax.tasks.gaussian_random_field.task import GaussianRandomField
+        from sbibm_jax.tasks.gaussian_random_field.task import (
+            GaussianRandomField,
+        )
         return GaussianRandomField(*args, **kwargs)
 
     else:
@@ -71,6 +75,9 @@ def get_task_name_display(task_name: str, *args: Any, **kwargs: Any) -> str:
 def get_available_tasks() -> List[str]:
     """Get list of available task names."""
     task_dir = Path(__file__).parent.absolute()
-    tasks = [f.name for f in task_dir.glob("*") if f.is_dir() and f.name[0] != "_"]
+    tasks = [
+        f.name for f in task_dir.glob("*")
+        if f.is_dir() and f.name[0] != "_"
+    ]
     tasks_extra = ["slcp_distractors", "bernoulli_glm_raw"]
     return sorted(tasks + tasks_extra)

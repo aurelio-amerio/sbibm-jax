@@ -1,4 +1,5 @@
-"""Gaussian Random Field task: field inference via a coloured-noise simulator."""
+"""Gaussian Random Field task: field inference via a coloured-noise simulator.
+"""
 
 from pathlib import Path
 from typing import Optional
