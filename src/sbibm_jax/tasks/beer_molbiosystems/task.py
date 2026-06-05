@@ -10,13 +10,13 @@ Installing the extra triggers a one-time AMICI compile of the Beer model.
 """
 
 from pathlib import Path
-from typing import List, Optional  # noqa: F401
+from typing import List, Optional
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 
-from sbibm_jax.tasks.simulator import Simulator  # noqa: F401
+from sbibm_jax.tasks.simulator import Simulator
 from sbibm_jax.tasks.task import Task
 
 # Filled in from Task 2 introspection of the Beer problem.
@@ -113,3 +113,48 @@ class BeerMolBioSystems(Task):
         L = self._load()
         pp = L["pypesto_problem"]
         return [pp.x_names[i] for i in pp.x_free_indices]
+
+    # --- simulator ------------------------------------------------------
+
+    def _full_scaled(self, free_scaled: np.ndarray) -> np.ndarray:
+        """Reconstruct a full scaled parameter vector from free-scaled params."""
+        pp = self._load()["pypesto_problem"]
+        return np.asarray(pp.get_full_vector(np.asarray(free_scaled).reshape(-1)))
+
+    def get_simulator(
+        self, key: jax.random.PRNGKey, max_calls: Optional[int] = None
+    ) -> Simulator:
+        from joblib import Parallel, delayed
+
+        L = self._load()
+        helpers = L["helpers"]
+        factory = L["factory"]
+        amici_predictor = L["amici_predictor"]
+        petab_problem = L["petab_problem"]
+        pp = L["pypesto_problem"]
+        n_jobs = self.n_jobs
+        dim_data = self.dim_data
+
+        def _simulate_one(full_scaled):
+            out = helpers.simulator_amici(
+                full_scaled, amici_predictor, factory,
+                petab_problem, pp, return_df=False,
+            )
+            return np.asarray(out["sim_data"], dtype=float).reshape(-1)
+
+        def simulator(key, parameters):
+            params = np.asarray(parameters, dtype=float)
+            np.random.seed(_seed_from_key(key))  # reproducible measurement noise
+            full = [self._full_scaled(params[i]) for i in range(params.shape[0])]
+            results = Parallel(n_jobs=n_jobs)(
+                delayed(_simulate_one)(f) for f in full
+            )
+            rows = []
+            for r in results:
+                if r.shape[0] != dim_data:
+                    rows.append(np.full(dim_data, np.nan))
+                else:
+                    rows.append(r)
+            return jnp.asarray(np.stack(rows, axis=0))
+
+        return Simulator(task=self, simulator=simulator, max_calls=max_calls)

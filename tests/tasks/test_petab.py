@@ -39,3 +39,25 @@ class TestPrior:
         samples = task.get_prior(key, num_samples=5)
         assert samples.shape == (5, task.dim_parameters)
         assert jnp.isrealobj(samples)
+
+
+@requires_pypesto
+class TestSimulator:
+    def test_shape_and_dtype(self):
+        task = BeerMolBioSystems()
+        k1, k2, k3 = jax.random.split(jax.random.PRNGKey(1), 3)
+        theta = task.get_prior(k1, num_samples=3)
+        sim = task.get_simulator(k2)
+        data = sim(k3, theta)
+        assert data.shape == (3, task.dim_data)
+        assert jnp.isrealobj(data)
+
+    def test_budget_exceeded(self):
+        from sbibm_jax.tasks.simulator import SimulationBudgetExceeded
+
+        task = BeerMolBioSystems()
+        k1, k2, k3 = jax.random.split(jax.random.PRNGKey(2), 3)
+        theta = task.get_prior(k1, num_samples=3)
+        sim = task.get_simulator(k2, max_calls=1)
+        with pytest.raises(SimulationBudgetExceeded):
+            sim(k3, theta)
