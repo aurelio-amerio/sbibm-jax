@@ -265,3 +265,52 @@ class BeerMolBioSystems(Task):
             n_chains=n_chains,
         )
         return jnp.asarray(np.asarray(samples, dtype=float))
+
+    # --- data-file generation (provided; run later, not now) ------------
+
+    def generate_observation_files(
+        self,
+        num_observation: int,
+        out_dir: Optional[Path] = None,
+        num_reference_samples: Optional[int] = None,
+        key: Optional[jax.random.PRNGKey] = None,
+    ) -> None:
+        """Write the files/num_observation_<N>/ tree for one observation.
+
+        Creates observation.csv and true_parameters.csv, and (when
+        num_reference_samples > 0) reference_posterior_samples.csv.bz2. This is
+        provided for later batch generation; it is not run as part of the port.
+
+        Args:
+            num_observation: 1-indexed observation number.
+            out_dir: Base directory (defaults to <task>/files).
+            num_reference_samples: Reference draws to generate (default
+                self.num_reference_posterior_samples; 0 to skip MCMC).
+            key: PRNG key for the reference MCMC (defaults to a key seeded from
+                the observation seed).
+        """
+        base = Path(out_dir) if out_dir is not None else (self.path / "files")
+        obs_dir = base / f"num_observation_{num_observation}"
+        obs_dir.mkdir(parents=True, exist_ok=True)
+
+        seed = self.observation_seeds[num_observation - 1]
+        true_free, flat_obs, _ = self._generate_observation(seed)
+
+        self.save_data(obs_dir / "observation.csv", jnp.asarray(flat_obs)[None, :])
+        self.save_parameters(
+            obs_dir / "true_parameters.csv", jnp.asarray(true_free)[None, :]
+        )
+
+        n_ref = (
+            self.num_reference_posterior_samples
+            if num_reference_samples is None
+            else num_reference_samples
+        )
+        if n_ref and n_ref > 0:
+            ref_key = key if key is not None else jax.random.PRNGKey(int(seed))
+            ref = self._sample_reference_posterior(
+                ref_key, num_samples=n_ref, num_observation=num_observation
+            )
+            self.save_parameters(
+                obs_dir / "reference_posterior_samples.csv.bz2", ref
+            )

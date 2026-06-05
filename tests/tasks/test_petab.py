@@ -113,3 +113,20 @@ class TestRegistry:
         from sbibm_jax import get_available_tasks
 
         assert "beer_molbiosystems" in get_available_tasks()
+
+
+@requires_pypesto
+@pytest.mark.slow
+@pytest.mark.experimental
+class TestObservationGeneration:
+    def test_generate_one_observation_files(self, tmp_path):
+        task = BeerMolBioSystems()
+        task.generate_observation_files(
+            num_observation=1,
+            out_dir=tmp_path,
+            num_reference_samples=0,  # skip the expensive MCMC for the dry run
+        )
+        obs = tmp_path / "num_observation_1" / "observation.csv"
+        tp = tmp_path / "num_observation_1" / "true_parameters.csv"
+        assert obs.exists()
+        assert tp.exists()
