@@ -139,3 +139,45 @@ class TestPowerSpectrum:
         ks, ps = _radial_power_spectrum(images, N)
         slope = np.polyfit(np.log(ks), np.log(ps), 1)[0]
         assert slope == pytest.approx(-alpha, abs=0.3)
+
+
+class TestReferenceSampler:
+    def test_shape_is_field_space(self):
+        task = GaussianRandomField(field_size=16)
+        samples = task._sample_reference_posterior(
+            jax.random.PRNGKey(0), num_samples=64, num_observation=1
+        )
+        assert samples.shape == (64, 16 * 16)
+
+    def test_observation_parameters_deterministic(self):
+        task = GaussianRandomField(field_size=16)
+        a = task._get_observation_parameters(1)
+        b = task._get_observation_parameters(1)
+        c = task._get_observation_parameters(2)
+        assert a.shape == (1, 2)
+        assert jnp.allclose(a, b)
+        assert not jnp.allclose(a, c)
+
+    def test_num_observation_matches_explicit_theta(self):
+        task = GaussianRandomField(field_size=16)
+        theta_o = task._get_observation_parameters(3)
+        key = jax.random.PRNGKey(11)
+        from_idx = task._sample_reference_posterior(
+            key, num_samples=8, num_observation=3
+        )
+        from_theta = task._sample_reference_posterior(
+            key, num_samples=8, observation=theta_o
+        )
+        assert jnp.allclose(from_idx, from_theta)
+
+    def test_reference_spectrum_matches_theta_o(self):
+        N = 32
+        task = GaussianRandomField(field_size=N)
+        theta_o = jnp.array([[0.0, 3.0]])
+        samples = task._sample_reference_posterior(
+            jax.random.PRNGKey(12), num_samples=2000, observation=theta_o
+        )
+        images = task.unflatten_data(samples)
+        ks, ps = _radial_power_spectrum(images, N)
+        slope = np.polyfit(np.log(ks), np.log(ps), 1)[0]
+        assert slope == pytest.approx(-3.0, abs=0.3)

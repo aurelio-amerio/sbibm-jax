@@ -86,6 +86,16 @@ class GaussianRandomField(Task):
 
         return Simulator(task=self, simulator=simulator, max_calls=max_calls)
 
+    def _get_observation_parameters(self, num_observation: int) -> jnp.ndarray:
+        """Conditioning parameters theta_o for an observation.
+
+        Derived deterministically from the observation seed (forward-compatible
+        with later-generated observation files). Returns shape (1, 2).
+        """
+        seed = self.observation_seeds[num_observation - 1]
+        key = jax.random.PRNGKey(seed)
+        return self.get_prior(key, num_samples=1)
+
     def _sample_reference_posterior(
         self,
         key: jax.random.PRNGKey,
@@ -93,7 +103,26 @@ class GaussianRandomField(Task):
         num_observation: Optional[int] = None,
         observation: Optional[jnp.ndarray] = None,
     ) -> jnp.ndarray:
-        raise NotImplementedError
+        """Sample the conditional likelihood p(field | theta_o).
+
+        This is the exact reference: run the simulator at a fixed theta_o.
+        theta_o comes from the observation seed (num_observation) or is passed
+        directly as `observation` (the role-inverted conditioning parameters).
+        Returns shape (num_samples, dim_data) in field space.
+        """
+        assert (num_observation is None) != (observation is None), (
+            "Provide exactly one of num_observation or observation."
+        )
+        if num_observation is not None:
+            theta_o = self._get_observation_parameters(num_observation)
+        else:
+            theta_o = jnp.atleast_2d(observation)
+
+        simulator = self.get_simulator(key)
+        thetas = jnp.broadcast_to(
+            theta_o.reshape(1, -1), (num_samples, self.dim_parameters)
+        )
+        return simulator(key, thetas)
 
     def unflatten_data(self, data: jnp.ndarray) -> jnp.ndarray:
         return data.reshape(-1, self.field_size, self.field_size)
