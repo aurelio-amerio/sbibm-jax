@@ -201,3 +201,43 @@ class TestRegistry:
         from sbibm_jax import get_available_tasks
 
         assert "gaussian_random_field" in get_available_tasks()
+
+
+@pytest.mark.slow
+class TestOracleCrossCheck:
+    def test_power_spectrum_matches_fyeldgenerator(self):
+        FyeldGenerator = pytest.importorskip("FyeldGenerator")
+        generate_field = FyeldGenerator.generate_field
+
+        N = 32
+        alpha = 3.0
+        log_std = 0.0
+
+        # --- numpy oracle ---
+        rng = np.random.default_rng(0)
+
+        def distribution(shape):
+            return rng.normal(size=shape) + 1j * rng.normal(size=shape)
+
+        def power_spectrum(k):
+            return np.power(k, -alpha) * np.exp(log_std) ** 2
+
+        oracle = np.stack([
+            generate_field(
+                distribution, power_spectrum, (N, N),
+                unit_length=1.0 / (abs(alpha) + 1e-7),
+            )
+            for _ in range(2000)
+        ])
+        ks_o, ps_o = _radial_power_spectrum(oracle, N)
+        slope_o = np.polyfit(np.log(ks_o), np.log(ps_o), 1)[0]
+
+        # --- jax port ---
+        task = GaussianRandomField(field_size=N)
+        theta = jnp.tile(jnp.array([log_std, alpha]), (2000, 1))
+        sim = task.get_simulator(jax.random.PRNGKey(0))
+        images = task.unflatten_data(sim(jax.random.PRNGKey(1), theta))
+        ks_j, ps_j = _radial_power_spectrum(images, N)
+        slope_j = np.polyfit(np.log(ks_j), np.log(ps_j), 1)[0]
+
+        assert slope_j == pytest.approx(slope_o, abs=0.2)
