@@ -6,11 +6,24 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "diffrax>=0.7.2",
+    "fyeldgenerator>=0.1.7",
     "jax[cuda12]>=0.9.1",
     "matplotlib>=3.10.8",
     "numpy>=2.4.2",
     "numpyro>=0.18.0",
     "pandas>=2.0.0",
+]
+
+[project.optional-dependencies]
+pypesto = [
+    "pypesto[amici]>=0.6.0",
+    "petab",
+    "benchmark-models-petab",
+    "joblib",
+    "scipy",
+    # petab's linter (np.issubdtype on column dtypes) breaks on pandas 3.0's
+    # default StringDtype; pin to the pandas 2.x line.
+    "pandas<3.0",
 ]
 
 [dependency-groups]
@@ -66,3 +79,4 @@ explicit = true
 torch = [
     { index = "pytorch-cpu" },
 ]
+benchmark-models-petab = { git = "https://github.com/Benchmarking-Initiative/Benchmark-Models-PEtab.git", subdirectory = "src/python", rev = "master" }
