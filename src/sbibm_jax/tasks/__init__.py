@@ -64,6 +64,10 @@ def get_task(task_name: str, *args: Any, **kwargs: Any) -> Task:
         return GaussianRandomField(*args, **kwargs)
 
     elif task_name == "gaussian_random_field_256":
+        # Shares gaussian_random_field's path (files/), so it has no
+        # 256-specific reference CSVs -> has_reference stays False. If
+        # reference CSVs are ever added for the 32 task, this alias would
+        # wrongly inherit them (1024-dim vs the 256x256 schema).
         from sbibm_jax.tasks.gaussian_random_field.task import (
             GaussianRandomField,
         )
