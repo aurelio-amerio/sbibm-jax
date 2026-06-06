@@ -19,3 +19,11 @@ def test_config_defaults():
     assert config.DEFAULT_CHUNK_SIZE == 4096
     assert config.DEFAULT_MAX_FACTOR == 10.0
     assert config.DEFAULT_MASTER_SEED == 0
+
+
+def test_test_repo_constant():
+    from sbibm_jax.hf import config
+
+    assert config.TEST_REPO == "aurelio-amerio/SBI-benchmarks-test"
+    # production constant is unchanged
+    assert config.DEFAULT_REPO == "aurelio-amerio/SBI-benchmarks"

@@ -2,7 +2,12 @@
 
 import numpy as np
 
+# Production dataset repo. NOTE: this is NOT the CLI default — make_dataset.py
+# targets TEST_REPO unless --prod is passed.
 DEFAULT_REPO: str = "aurelio-amerio/SBI-benchmarks"
+
+# Default target for make_dataset.py (safe; use --prod to hit DEFAULT_REPO).
+TEST_REPO: str = "aurelio-amerio/SBI-benchmarks-test"
 
 DEFAULT_SPLIT_SIZES: dict = {
     "train": 1_000_000,
