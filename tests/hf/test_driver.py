@@ -1,5 +1,7 @@
 """Smoke tests for scripts/make_dataset.py (no real HF calls)."""
 
+import importlib.util
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -62,3 +64,51 @@ def test_dry_run_banner_prod(tmp_path):
     # the production repo id, without the -test suffix, must appear
     assert "aurelio-amerio/SBI-benchmarks\n" in result.stdout \
         or "aurelio-amerio/SBI-benchmarks " in result.stdout
+
+
+def _load_driver():
+    spec = importlib.util.spec_from_file_location("make_dataset_mod", DRIVER)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_real_upload_merges_remote_and_deletes_local(monkeypatch, tmp_path):
+    mod = _load_driver()
+    out = tmp_path / "metadata.json"
+
+    # Remote already documents a *different* task; merge must preserve it.
+    monkeypatch.setattr(
+        mod, "fetch_remote_metadata", lambda repo: {"two_moons": {"x": 1}})
+
+    captured = {}
+
+    def fake_upload_metadata(path, repo):
+        captured["content"] = json.loads(open(path).read())
+        captured["repo"] = repo
+
+    monkeypatch.setattr(mod, "upload_metadata", fake_upload_metadata)
+    monkeypatch.setattr(mod, "upload_dataset", lambda repo, name, **o: None)
+
+    mod.main(["--tasks", "gaussian_linear", "--metadata-path", str(out)])
+
+    # merged: remote task preserved + selected task added
+    assert "two_moons" in captured["content"]
+    assert "gaussian_linear" in captured["content"]
+    # default target is the test repo
+    assert captured["repo"] == "aurelio-amerio/SBI-benchmarks-test"
+    # local artifact deleted -> clean state
+    assert not out.exists()
+
+
+def test_dry_run_keeps_local_and_skips_network(monkeypatch, tmp_path):
+    mod = _load_driver()
+    out = tmp_path / "metadata.json"
+
+    def boom(repo):
+        raise AssertionError("network must not be touched on --dry-run")
+
+    monkeypatch.setattr(mod, "fetch_remote_metadata", boom)
+    mod.main(["--tasks", "gaussian_linear", "--metadata-path", str(out),
+              "--dry-run"])
+    assert out.exists()  # kept for inspection

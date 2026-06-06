@@ -17,6 +17,7 @@ Uploads target the TEST repo by default; pass --prod for production.
 """
 
 import argparse
+import json
 import logging
 import sys
 from pathlib import Path
@@ -24,7 +25,9 @@ from pathlib import Path
 from sbibm_jax import get_available_tasks
 from sbibm_jax.hf import (
     config,
+    fetch_remote_metadata,
     make_metadata,
+    merge_metadata,
     upload_dataset,
     upload_metadata,
 )
@@ -110,17 +113,23 @@ def main(argv=None):
             "test": build_opts.get(
                 "test_size", config.DEFAULT_SPLIT_SIZES["test"]),
         }
-    make_metadata(task_names, output_path=metadata_path, split_sizes=split_sizes)
+    local_meta = make_metadata(
+        task_names, output_path=metadata_path, split_sizes=split_sizes)
     print(f"Wrote {metadata_path}")
 
     if args.dry_run:
         print("Dry run — skipping HF uploads.")
         return
 
+    remote_meta = fetch_remote_metadata(repo)
+    merged_meta = merge_metadata(remote_meta, local_meta)
+    metadata_path.write_text(json.dumps(merged_meta, indent=4))
     upload_metadata(str(metadata_path), repo)
     for name in task_names:
         print(f"Uploading dataset for task: {name}")
         upload_dataset(repo, name, **build_opts)
+    metadata_path.unlink(missing_ok=True)
+    print(f"Removed local {metadata_path} (clean state).")
 
 
 if __name__ == "__main__":
