@@ -241,3 +241,21 @@ class TestOracleCrossCheck:
         slope_j = np.polyfit(np.log(ks_j), np.log(ps_j), 1)[0]
 
         assert slope_j == pytest.approx(slope_o, abs=0.2)
+
+
+class TestNameOverride:
+    def test_default_name_unchanged(self):
+        t = GaussianRandomField(field_size=16)
+        assert t.name == "gaussian_random_field"
+        assert t.name_display == "Gaussian Random Field"
+
+    def test_explicit_name_override(self):
+        t = GaussianRandomField(
+            field_size=256,
+            name="gaussian_random_field_256",
+            name_display="Gaussian Random Field (256x256)",
+        )
+        assert t.name == "gaussian_random_field_256"
+        assert t.name_display == "Gaussian Random Field (256x256)"
+        assert t.field_size == 256
+        assert t.dim_data == 256 * 256

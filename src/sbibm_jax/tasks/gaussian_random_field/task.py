@@ -13,7 +13,12 @@ from sbibm_jax.tasks.task import Task
 
 
 class GaussianRandomField(Task):
-    def __init__(self, field_size: int = 32):
+    def __init__(
+        self,
+        field_size: int = 32,
+        name: Optional[str] = None,
+        name_display: Optional[str] = None,
+    ):
         """Gaussian Random Field field-inference task.
 
         Parameters theta = (log_std, alpha) control a 2D Gaussian random
@@ -23,13 +28,16 @@ class GaussianRandomField(Task):
 
         Args:
             field_size: Side length N of the (N, N) field.
+            name: Optional task name override (defaults to the directory
+                name). Used by the high-resolution registry alias.
+            name_display: Optional human-readable label override.
         """
         self.field_size = field_size
         super().__init__(
             dim_parameters=2,
             dim_data=field_size * field_size,
-            name=Path(__file__).parent.name,
-            name_display="Gaussian Random Field",
+            name=name or Path(__file__).parent.name,
+            name_display=name_display or "Gaussian Random Field",
             num_observations=10,
             num_posterior_samples=10000,
             num_reference_posterior_samples=10000,
