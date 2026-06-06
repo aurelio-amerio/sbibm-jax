@@ -14,6 +14,90 @@
 
 ---
 
+## Handoff / Current Status (updated 2026-06-06)
+
+> **Read this first if you are resuming.** Execute the remaining tasks with
+> **superpowers:subagent-driven-development** (fresh implementer subagent per
+> task, then spec-compliance review, then code-quality review). Start at
+> **Task 3**.
+>
+> **Worktree to resume in:** `hf-dataset-pipeline-impl`
+> — path `/lustre/ific.uv.es/ml/ific088/github/sbibm-jax/.claude/worktrees/hf-dataset-pipeline-impl`,
+> branch `worktree-hf-dataset-pipeline-impl` (the merge that pulled in `toy_lensing`
+> is commit `49baecf`). `git worktree list` shows it; `cd` there and run all
+> commands from it. Do **not** work in the main checkout
+> (`/lustre/ific.uv.es/ml/ific088/github/sbibm-jax`, on branch
+> `hf-dataset-pipeline`).
+
+**Progress:**
+
+| Task | Status | Commit |
+| --- | --- | --- |
+| 1 — `[hf]` extra + package scaffold | ✅ DONE | `c06d19a` |
+| 2 — `DatasetExporter` base + `VectorExporter` (all 3 subclasses live in `exporter.py`) | ✅ DONE | `fd513cb` |
+| 3 — `ImageExporter` tests | ⬜ TODO (next) | — |
+| 4 — `TimeSeriesExporter` tests | ⬜ TODO | — |
+| 5 — Registry + `get_exporter` | ⬜ TODO | — |
+| 6 — GRF image hints | ⬜ TODO | — |
+| **6b — Toy Lensing image hints (NEW)** | ⬜ TODO | — |
+| 7 — Generation: seeding + chunking | ⬜ TODO | — |
+| 8 — Generation: resample policy | ⬜ TODO | — |
+| 9 — `hf_resample_invalid` on ODE/PEtab tasks | ⬜ TODO | — |
+| 10 — Reference block loader | ⬜ TODO | — |
+| 11 — `make_metadata` | ⬜ TODO | — |
+| 12 — Upload helpers | ⬜ TODO | — |
+| 13 — `build_dataset` orchestration + integration | ⬜ TODO | — |
+| 14 — Driver script | ⬜ TODO | — |
+
+**Branch & worktree:**
+- Working in the git worktree at
+  `/lustre/ific.uv.es/ml/ific088/github/sbibm-jax/.claude/worktrees/hf-dataset-pipeline-impl`,
+  branch `worktree-hf-dataset-pipeline-impl`. Run all commands from there (do
+  **not** `cd` to the main checkout at `/lhome/ific/a/aamerio/data/github/sbibm-jax`).
+- The `hf-dataset-pipeline` branch (tip `afedf83`) was **merged** into this
+  branch (a real merge commit). That merge brought in: the `toy_lensing` task
+  (`src/sbibm_jax/tasks/toy_lensing/`), the HF design spec, **this plan doc**,
+  `scripts/plot_grf_observations.py`, and the
+  `.claude/agents/superpowers-sdd-implementer.md` agent definition. Two empty
+  untracked files (`.gitconfig`, `.claude/agents`) were deleted to let the merge
+  proceed.
+- For code-quality reviews, use the commit on this branch immediately **before**
+  the task under review as `BASE_SHA` (each task commits incrementally), and the
+  task's commit as `HEAD_SHA`.
+
+**Environment (already set up — do not redo):**
+- The `[hf]` extra is installed: `datasets 5.0.0`, `huggingface_hub 1.18.0`.
+  `datasets.List` **is** available (datasets ≥ 3), so use `List` everywhere — the
+  `Sequence(Value(...))` fallback mentioned in Task 2's implementer note is **not
+  needed**.
+- The command **sandbox is disabled** for this session, so `uv` commands run
+  normally. (Historical note: under the sandbox, `uv` failed with a read-only
+  `~/.cache/uv`. If a future session re-enables the sandbox, either run `uv` with
+  the sandbox disabled or point `UV_CACHE_DIR` at a writable path.)
+- The GPU may be busy, so JAX's CUDA backend can fail to initialise. The test
+  suite forces `JAX_PLATFORMS=cpu` via `pytest-env` (already configured in
+  `pyproject.toml`), so `uv run pytest` is unaffected. For ad-hoc
+  `uv run python -c ...` checks, prefix with `JAX_PLATFORMS=cpu`.
+- Every `uv` call prints a benign warning: `VIRTUAL_ENV=... does not match the
+  project environment path .venv and will be ignored`. It points at the main
+  checkout's `.venv`; ignore it.
+
+**Last verified test status:**
+`uv run pytest tests/hf/ tests/tasks/test_toy_lensing.py -q` → **29 passed**
+(6 hf + 23 toy_lensing).
+
+**What changed vs. the original plan:**
+- `toy_lensing` is now a real in-tree task (it did not exist when this plan was
+  first written — the plan called it "future toy_lensing"). It is an
+  **image** task: 32×32 (`resolution` default 32, `dim_data = resolution²`,
+  `dim_parameters = 2`) with **no tractable reference posterior**
+  (`_sample_reference_posterior` raises `NotImplementedError`; no reference CSVs,
+  so `load_reference` returns `None`). It therefore needs the same image hints as
+  GRF → added as **Task 6b** below. It is also a useful extra case for
+  reference-absence (Task 10) and image-build (Task 13); inline notes added there.
+
+---
+
 ## File Structure
 
 **Create (in `sbibm-jax`):**
@@ -42,6 +126,7 @@
 
 - `pyproject.toml` — add the `[hf]` optional extra.
 - `src/sbibm_jax/tasks/gaussian_random_field/task.py` — set `self.hf_data_kind = "image"` and `self.hf_data_shape = (field_size, field_size)` in `__init__`.
+- `src/sbibm_jax/tasks/toy_lensing/task.py` — set `self.hf_data_kind = "image"` and `self.hf_data_shape = (resolution, resolution)` in `__init__` (Task 6b; merged into the worktree from `hf-dataset-pipeline`).
 - `src/sbibm_jax/tasks/lotka_volterra/task.py` — set `self.hf_resample_invalid = True` in `__init__`.
 - `src/sbibm_jax/tasks/sir/task.py` — set `self.hf_resample_invalid = True` in `__init__`.
 - `src/sbibm_jax/tasks/beer_molbiosystems/task.py` — set `self.hf_resample_invalid = True` in `__init__`.
@@ -51,6 +136,8 @@ All other tasks (`gaussian_linear`, `gaussian_linear_uniform`, `gaussian_mixture
 ---
 
 ## Task 1: Add `[hf]` extra and package scaffold
+
+> **✅ DONE — committed as `c06d19a` ("feat(hf): add sbibm_jax.hf package scaffold with [hf] extra").** All steps below are complete; the `[hf]` deps are installed (`datasets 5.0.0`, `huggingface_hub 1.18.0`). Kept for reference.
 
 **Files:**
 - Modify: `pyproject.toml`
@@ -238,6 +325,8 @@ git commit -m "feat(hf): add sbibm_jax.hf package scaffold with [hf] extra"
 ---
 
 ## Task 2: `DatasetExporter` base + `VectorExporter`
+
+> **✅ DONE — committed as `fd513cb` ("feat(hf): add DatasetExporter base and VectorExporter").** `src/sbibm_jax/hf/exporter.py` was created with the base class **and all three subclasses** (`VectorExporter`, `ImageExporter`, `TimeSeriesExporter`), so Tasks 3 and 4 only add tests. `tests/hf/test_exporter.py` currently holds `TestVectorExporter` (4 tests passing). **Note:** the implementer note below about a `Sequence` fallback is moot — `datasets.List` is available in the installed `datasets 5.0.0`.
 
 **Files:**
 - Create: `src/sbibm_jax/hf/exporter.py`
@@ -863,6 +952,84 @@ git commit -m "feat(grf): declare hf_data_kind=image and hf_data_shape hint"
 
 ---
 
+## Task 6b: Hint attributes on the Toy Lensing task
+
+**Files:**
+- Modify: `src/sbibm_jax/tasks/toy_lensing/task.py`
+- Test: `tests/hf/test_registry.py` (add a real-task selection test)
+
+`toy_lensing` was merged into this worktree from the `hf-dataset-pipeline`
+branch after the original plan was written. It is an **image** task: the
+observation is a `(resolution, resolution)` image (default `resolution=32`),
+flattened to `dim_data = resolution²` pixels (`dim_parameters = 2`). It mirrors
+GRF exactly, so it gets the same `hf_data_kind = "image"` / `hf_data_shape`
+hints. `resolution` is instance state, so the hint must be set in `__init__`
+after `super().__init__`.
+
+It has **no tractable reference posterior**
+(`_sample_reference_posterior` raises `NotImplementedError`; there are no
+reference CSVs), so `load_reference` (Task 10) must return `None` for it — same
+as GRF and Beer.
+
+- [ ] **Step 1: Write the failing test**
+
+Append to `tests/hf/test_registry.py` (the `TestRegistryRealTasks` class added in
+Task 6 is a natural home; add these two methods to it, or add a sibling class):
+
+```python
+    def test_toy_lensing_selects_image_exporter(self):
+        task = get_task("toy_lensing", resolution=8)
+        exp = get_exporter(task, train_size=4, val_size=2, test_size=2)
+        assert isinstance(exp, ImageExporter)
+        assert exp.data_shape == (8, 8)
+
+    def test_toy_lensing_default_resolution_32(self):
+        task = get_task("toy_lensing")
+        exp = get_exporter(task, train_size=4, val_size=2, test_size=2)
+        assert isinstance(exp, ImageExporter)
+        assert exp.data_shape == (32, 32)
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `uv run pytest tests/hf/test_registry.py -k toy_lensing -v`
+Expected: FAIL — `hf_data_kind` defaults to `"vector"` until the hint is set.
+
+- [ ] **Step 3: Add hints to Toy Lensing `__init__`**
+
+Edit `src/sbibm_jax/tasks/toy_lensing/task.py`. Insert the hint assignments
+between the `super().__init__(...)` call and the `self.prior_dist = ...`
+assignment, mirroring GRF:
+
+```python
+            path=Path(__file__).parent.absolute(),
+        )
+
+        # HF export hints: stored as (H, W) images via ImageExporter.
+        self.hf_data_kind = "image"
+        self.hf_data_shape = (resolution, resolution)
+
+        self.prior_dist = dist.Independent(
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `uv run pytest tests/hf/test_registry.py -k toy_lensing -v`
+Expected: 2 tests PASS.
+
+Also confirm no task-level regressions:
+Run: `uv run pytest tests/tasks/test_toy_lensing.py -v`
+Expected: all PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/sbibm_jax/tasks/toy_lensing/task.py tests/hf/test_registry.py
+git commit -m "feat(toy_lensing): declare hf_data_kind=image and hf_data_shape hint"
+```
+
+---
+
 ## Task 7: Generation — seeding + chunking (default validity policy)
 
 **Files:**
@@ -1358,7 +1525,12 @@ Reads each task's `files/num_observation_<i>/{observation, reference_posterior_s
 true_parameters}.csv*` via the existing `Task` loaders. Builds a `datasets.Dataset`
 with fields `reference_samples`, `observations`, `true_parameters` (matches the
 original `SBI-benchmarks-data` schema). Returns `None` when the files are
-absent (GRF, Beer, future toy_lensing) — caller skips the `_posterior` config.
+absent (GRF, Beer, toy_lensing) — caller skips the `_posterior` config.
+
+> **Note (toy_lensing):** `toy_lensing` is now in-tree and also has no reference
+> CSVs, so it is another valid absence case. The `test_grf_absent_returns_none`
+> test below is sufficient coverage; optionally add an analogous
+> `test_toy_lensing_absent_returns_none` using `get_task("toy_lensing", resolution=8)`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1854,6 +2026,12 @@ git commit -m "feat(hf): upload helpers with mockable HF surface"
 Wires Task 5–11 together. Streams chunks through `Dataset.from_generator` so
 memory stays bounded.
 
+> **Note (toy_lensing):** the `TestBuildImage` tests below use `gaussian_random_field`
+> as the image case, which is sufficient. `toy_lensing` (also image, also
+> reference-less) is an equally valid smoke case if you want a second one — e.g.
+> `build_dataset("toy_lensing", **SMALL_OPTS, task_kwargs={"resolution": 8})`
+> should yield `(8, 8)` `xs` rows and a `None` reference. Optional, not required.
+
 - [ ] **Step 1: Write the failing test**
 
 Create `tests/hf/test_build_dataset.py`:
@@ -2264,7 +2442,7 @@ git commit -m "feat(hf): thin driver script replacing the old make_dataset.py"
 
 ## Done
 
-After all 14 tasks land:
+After all 14 tasks (plus Task 6b) land:
 
 - `sbibm_jax.hf` is a self-contained, no-torch, no-original-sbibm subpackage
   that builds the same published HuggingFace dataset entirely from the JAX
@@ -2272,7 +2450,9 @@ After all 14 tasks land:
 - New tasks added to `sbibm_jax/tasks/*` automatically work in the pipeline:
   flat analytical tasks need zero changes; structured tasks set tiny
   `hf_data_kind` / `hf_data_shape` / `hf_resample_invalid` hints on
-  themselves.
+  themselves. The two in-tree image tasks (`gaussian_random_field` via Task 6
+  and `toy_lensing` via Task 6b) demonstrate this; both are reference-less and
+  exercise the `ImageExporter` + `load_reference`-returns-`None` paths.
 - All HF-network calls are isolated in `sbibm_jax/hf/upload.py` and can be
   monkeypatched for tests.
 - The pipeline is covered by ~30+ CPU-only tests under `tests/hf/`, none of
