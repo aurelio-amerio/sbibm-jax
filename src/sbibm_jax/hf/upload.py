@@ -9,7 +9,7 @@ monkeypatching them on `sbibm_jax.hf.upload` (and the shadowing of
 import json
 
 from huggingface_hub import hf_hub_download, upload_file
-from huggingface_hub.utils import EntryNotFoundError, RepositoryNotFoundError
+from huggingface_hub.utils import EntryNotFoundError
 
 from sbibm_jax.hf.build import build_dataset
 
@@ -27,11 +27,13 @@ def upload_metadata(file_path: str, repo_name: str) -> None:
 def fetch_remote_metadata(repo_name: str) -> dict:
     """Return the repo's existing metadata.json as a dict, or {} if absent.
 
-    Downloads with force_download to avoid a stale local cache. A missing file
-    (EntryNotFoundError) or a non-existent repo (RepositoryNotFoundError) is
-    treated as "no remote metadata" and returns {}. Any other error (auth,
-    HTTP/connection) propagates — a transient failure must never be silently
-    treated as an empty remote, which would drop sibling task entries on merge.
+    Downloads with force_download to avoid a stale local cache. Only a missing
+    metadata.json in an existing repo (EntryNotFoundError) yields {} — a fresh
+    start. Every other failure propagates: a non-existent repo, an auth error,
+    or a transient HTTP/connection error must never be silently treated as an
+    empty remote, which would drop sibling task entries on merge. (Note: under
+    force_download=True, hf_hub_download wraps a missing-repo error as a
+    generic error rather than RepositoryNotFoundError, so it propagates too.)
     """
     try:
         local_path = hf_hub_download(
@@ -40,7 +42,7 @@ def fetch_remote_metadata(repo_name: str) -> dict:
             repo_type="dataset",
             force_download=True,
         )
-    except (EntryNotFoundError, RepositoryNotFoundError):
+    except EntryNotFoundError:
         return {}
     with open(local_path) as f:
         return json.load(f)

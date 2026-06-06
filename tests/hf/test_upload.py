@@ -125,11 +125,17 @@ class TestFetchRemoteMetadata:
         monkeypatch.setattr(upload_mod, "hf_hub_download", boom)
         assert fetch_remote_metadata("user/repo") == {}
 
-    def test_repo_not_found_returns_empty(self, monkeypatch):
+    def test_repo_not_found_propagates(self, monkeypatch):
+        # A non-existent repo must NOT be silently treated as an empty
+        # remote (that would drop sibling task entries on merge). Under
+        # force_download=True the real hf_hub_download wraps this as a
+        # generic error; fetch_remote_metadata only swallows a missing
+        # FILE (EntryNotFoundError), so a repo-not-found must propagate.
         def boom(**kw):
             raise RepositoryNotFoundError.__new__(RepositoryNotFoundError)
         monkeypatch.setattr(upload_mod, "hf_hub_download", boom)
-        assert fetch_remote_metadata("user/repo") == {}
+        with pytest.raises(RepositoryNotFoundError):
+            fetch_remote_metadata("user/repo")
 
     def test_other_error_propagates(self, monkeypatch):
         def boom(**kw):
