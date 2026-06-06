@@ -58,7 +58,8 @@ class LotkaVolterra(Task):
             path=Path(__file__).parent.absolute(),
             observation_seeds=observation_seeds,
         )
-
+        # ODE divergences emit NaN rows; rejection-resample at HF export time.
+        self.hf_resample_invalid = True
 
         mu_p1 = -0.125
         mu_p2 = -3.0

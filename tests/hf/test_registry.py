@@ -75,3 +75,16 @@ class TestRegistryRealTasks:
         exp = get_exporter(task, train_size=4, val_size=2, test_size=2)
         assert isinstance(exp, ImageExporter)
         assert exp.data_shape == (32, 32)
+
+
+class TestResampleHints:
+    @pytest.mark.parametrize(
+        "name",
+        ["lotka_volterra", "sir", "beer_molbiosystems"],
+    )
+    def test_resample_invalid_set(self, name):
+        try:
+            task = get_task(name)
+        except ImportError as e:
+            pytest.skip(f"task {name} requires an extra: {e}")
+        assert getattr(task, "hf_resample_invalid", False) is True

@@ -59,6 +59,8 @@ class BeerMolBioSystems(Task):
             num_simulations=[1000, 10000, 100000, 1000000],
             path=Path(__file__).parent.absolute(),
         )
+        # AMICI failures emit full NaN rows; rejection-resample at HF export time.
+        self.hf_resample_invalid = True
         # Lazily built, cached pypesto/AMICI handles.
         self._loaded = None
 
