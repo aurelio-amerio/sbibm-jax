@@ -1,9 +1,12 @@
 """Build (and optionally upload) HuggingFace datasets for sbibm_jax tasks.
 
-Replaces SBI-benchmarks-data/make_dataset.py. Usage:
+Uploads target the TEST repo by default; pass --prod for production.
 
-    # Default repo, all available tasks, real upload:
+    # Test repo (default), all available tasks, real upload:
     uv run python scripts/make_dataset.py --all
+
+    # Production repo:
+    uv run python scripts/make_dataset.py --all --prod
 
     # Explicit task list, dry-run (writes metadata.json, no HF push):
     uv run python scripts/make_dataset.py --tasks gaussian_linear two_moons --dry-run
@@ -40,14 +43,20 @@ def parse_args(argv=None):
         help="Process every task returned by get_available_tasks().",
     )
     p.add_argument(
-        "--repo",
-        default=config.DEFAULT_REPO,
-        help=f"HuggingFace dataset repo (default: {config.DEFAULT_REPO}).",
+        "--prod",
+        action="store_true",
+        help=(
+            "Upload to the PRODUCTION repo (config.DEFAULT_REPO). Without it, "
+            "uploads target the test repo (config.TEST_REPO)."
+        ),
     )
     p.add_argument(
         "--metadata-path",
         default="metadata.json",
-        help="Where to write metadata.json (default: ./metadata.json).",
+        help=(
+            "Where to write metadata.json (default: ./metadata.json). Deleted "
+            "after a successful real upload; kept on --dry-run."
+        ),
     )
     p.add_argument("--train-size", type=int, default=None)
     p.add_argument("--val-size", type=int, default=None)
@@ -77,6 +86,10 @@ def main(argv=None):
         print("ERROR: pass --tasks NAME [NAME ...] or --all", file=sys.stderr)
         sys.exit(2)
 
+    repo = config.DEFAULT_REPO if args.prod else config.TEST_REPO
+    label = "PRODUCTION" if args.prod else "TEST"
+    print(f"Target repo: {repo}  ({label})")
+
     build_opts = {}
     if args.train_size is not None:
         build_opts["train_size"] = args.train_size
@@ -104,10 +117,10 @@ def main(argv=None):
         print("Dry run — skipping HF uploads.")
         return
 
-    upload_metadata(str(metadata_path), args.repo)
+    upload_metadata(str(metadata_path), repo)
     for name in task_names:
         print(f"Uploading dataset for task: {name}")
-        upload_dataset(args.repo, name, **build_opts)
+        upload_dataset(repo, name, **build_opts)
 
 
 if __name__ == "__main__":
