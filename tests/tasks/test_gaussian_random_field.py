@@ -259,3 +259,33 @@ class TestNameOverride:
         assert t.name_display == "Gaussian Random Field (256x256)"
         assert t.field_size == 256
         assert t.dim_data == 256 * 256
+
+
+class TestHighResVariant:
+    def test_registry_alias(self):
+        from sbibm_jax import get_task
+        task = get_task("gaussian_random_field_256")
+        assert task.name == "gaussian_random_field_256"
+        assert task.name_display == "Gaussian Random Field (256x256)"
+        assert task.field_size == 256
+        assert task.dim_data == 256 * 256
+        assert task.hf_data_kind == "image"
+        assert task.hf_data_shape == (256, 256)
+        assert task.hf_split_sizes == {
+            "train": 100_000, "validation": 10_000, "test": 10_000,
+        }
+
+    def test_in_available_tasks(self):
+        from sbibm_jax import get_available_tasks
+        assert "gaussian_random_field_256" in get_available_tasks()
+
+    def test_smoke_generation(self):
+        from sbibm_jax import get_task
+        task = get_task("gaussian_random_field_256")
+        k1, k2, k3 = jax.random.split(jax.random.PRNGKey(0), 3)
+        theta = task.get_prior(k1, num_samples=2)
+        sim = task.get_simulator(k2)
+        data = sim(k3, theta)
+        assert data.shape == (2, 256 * 256)
+        assert jnp.all(jnp.isfinite(data))
+        assert task.unflatten_data(data).shape == (2, 256, 256)

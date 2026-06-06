@@ -52,6 +52,17 @@ class TestMakeMetadata:
             "test": 10_000,
         }
 
+    def test_grf_256_image_schema(self):
+        meta = make_metadata(["gaussian_random_field_256"])
+        m = meta["gaussian_random_field_256"]
+        assert m["data_kind"] == "image"
+        assert m["data_shape"] == [256, 256]
+        assert m["dim_data"] == 256 * 256
+        assert m["has_reference"] is False
+        assert m["splits"] == {
+            "train": 100_000, "validation": 10_000, "test": 10_000,
+        }
+
     def test_writes_json_file(self, tmp_path):
         out = tmp_path / "metadata.json"
         meta = make_metadata(["gaussian_linear"], output_path=out)

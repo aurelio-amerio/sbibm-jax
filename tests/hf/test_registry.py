@@ -76,6 +76,15 @@ class TestRegistryRealTasks:
         assert isinstance(exp, ImageExporter)
         assert exp.data_shape == (32, 32)
 
+    def test_grf_256_selects_image_exporter(self):
+        task = get_task("gaussian_random_field_256")
+        exp = get_exporter(task)
+        assert isinstance(exp, ImageExporter)
+        assert exp.data_shape == (256, 256)
+        assert exp.train_size == 100_000
+        assert exp.val_size == 10_000
+        assert exp.test_size == 10_000
+
 
 class TestResampleHints:
     @pytest.mark.parametrize(

@@ -63,6 +63,18 @@ def get_task(task_name: str, *args: Any, **kwargs: Any) -> Task:
         )
         return GaussianRandomField(*args, **kwargs)
 
+    elif task_name == "gaussian_random_field_256":
+        from sbibm_jax.tasks.gaussian_random_field.task import (
+            GaussianRandomField,
+        )
+        return GaussianRandomField(
+            *args,
+            field_size=256,
+            name="gaussian_random_field_256",
+            name_display="Gaussian Random Field (256x256)",
+            **kwargs,
+        )
+
     elif task_name == "beer_molbiosystems":
         from sbibm_jax.tasks.beer_molbiosystems.task import BeerMolBioSystems
         return BeerMolBioSystems(*args, **kwargs)
@@ -87,5 +99,9 @@ def get_available_tasks() -> List[str]:
         f.name for f in task_dir.glob("*")
         if f.is_dir() and f.name[0] != "_"
     ]
-    tasks_extra = ["slcp_distractors", "bernoulli_glm_raw"]
+    tasks_extra = [
+        "slcp_distractors",
+        "bernoulli_glm_raw",
+        "gaussian_random_field_256",
+    ]
     return sorted(tasks + tasks_extra)
