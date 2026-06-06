@@ -27,3 +27,12 @@ def test_test_repo_constant():
     assert config.TEST_REPO == "aurelio-amerio/SBI-benchmarks-test"
     # production constant is unchanged
     assert config.DEFAULT_REPO == "aurelio-amerio/SBI-benchmarks"
+
+
+def test_new_helpers_reexported():
+    import sbibm_jax.hf as hf
+
+    assert hasattr(hf, "merge_metadata")
+    assert hasattr(hf, "fetch_remote_metadata")
+    assert "merge_metadata" in hf.__all__
+    assert "fetch_remote_metadata" in hf.__all__
