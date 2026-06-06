@@ -13,9 +13,17 @@ def make_metadata(
     task_names: Iterable[str],
     *,
     output_path: Optional[Path] = None,
-    split_sizes: Optional[dict] = None,
+    train_size: Optional[int] = None,
+    val_size: Optional[int] = None,
+    test_size: Optional[int] = None,
 ) -> dict:
     """Build a metadata dict (and optionally write metadata.json).
+
+    Split sizes are resolved through the same per-dimension path as
+    ``build_dataset``: an explicit ``train/val/test_size`` wins, otherwise
+    ``get_exporter`` falls back to the task's ``hf_split_sizes`` (then the
+    global default). Passing only some sizes leaves the rest at the task cap,
+    so the recorded ``splits`` always match what the uploaded dataset contains.
 
     Schema per task:
         dim_parameters: int
@@ -29,18 +37,12 @@ def make_metadata(
     meta: dict = {}
     for name in task_names:
         task = get_task(name)
-        if split_sizes is None:
-            # No override: get_exporter resolves the task's hf_split_sizes
-            # (falling back to config.DEFAULT_SPLIT_SIZES).
-            exporter = get_exporter(task)
-        else:
-            # Explicit override (e.g. CLI --train-size) wins over the hint.
-            exporter = get_exporter(
-                task,
-                train_size=split_sizes["train"],
-                val_size=split_sizes["validation"],
-                test_size=split_sizes["test"],
-            )
+        exporter = get_exporter(
+            task,
+            train_size=train_size,
+            val_size=val_size,
+            test_size=test_size,
+        )
         # Record resolved sizes so metadata matches the uploaded dataset.
         meta[name] = {
             "dim_parameters": int(task.dim_parameters),

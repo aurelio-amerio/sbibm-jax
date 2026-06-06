@@ -41,6 +41,17 @@ class TestMakeMetadata:
             "test": 10_000,
         }
 
+    def test_partial_override_keeps_task_cap(self):
+        # gaussian_random_field caps train at 100k. Overriding only validation
+        # must keep train/test at the task cap, not fall back to the 1M global
+        # default — metadata must match what the dataset build would generate.
+        meta = make_metadata(["gaussian_random_field"], val_size=5000)
+        assert meta["gaussian_random_field"]["splits"] == {
+            "train": 100_000,
+            "validation": 5000,
+            "test": 10_000,
+        }
+
     def test_writes_json_file(self, tmp_path):
         out = tmp_path / "metadata.json"
         meta = make_metadata(["gaussian_linear"], output_path=out)

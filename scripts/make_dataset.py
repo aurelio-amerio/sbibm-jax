@@ -103,18 +103,16 @@ def main(argv=None):
     build_opts["master_seed"] = args.master_seed
 
     metadata_path = Path(args.metadata_path)
-    split_sizes = None
-    if any(k in build_opts for k in ("train_size", "val_size", "test_size")):
-        split_sizes = {
-            "train": build_opts.get(
-                "train_size", config.DEFAULT_SPLIT_SIZES["train"]),
-            "validation": build_opts.get(
-                "val_size", config.DEFAULT_SPLIT_SIZES["validation"]),
-            "test": build_opts.get(
-                "test_size", config.DEFAULT_SPLIT_SIZES["test"]),
-        }
+    # Pass the partial per-dimension overrides straight through: make_metadata
+    # resolves unspecified sizes from each task's hf_split_sizes exactly as the
+    # upload path does, so metadata and the generated dataset always agree.
     local_meta = make_metadata(
-        task_names, output_path=metadata_path, split_sizes=split_sizes)
+        task_names,
+        output_path=metadata_path,
+        train_size=args.train_size,
+        val_size=args.val_size,
+        test_size=args.test_size,
+    )
     print(f"Wrote {metadata_path}")
 
     if args.dry_run:
