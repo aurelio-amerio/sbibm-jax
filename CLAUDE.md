@@ -129,7 +129,13 @@ live in `hf/config.py`; `scripts/make_dataset.py` is the only CLI entry point.
   (`hf_data_kind`, `hf_data_shape`, `hf_resample_invalid`, `hf_split_sizes`) when
   it needs to deviate from the flat-vector default. The image tasks
   `gaussian_random_field` and `toy_lensing` declare `hf_data_kind="image"` plus a
-  2-D `hf_data_shape`; ODE/PEtab tasks set `hf_resample_invalid=True`.
+  2-D `hf_data_shape`; ODE/PEtab tasks set `hf_resample_invalid=True`. The
+  expensive tasks `toy_lensing`, `gaussian_random_field`, and `beer_molbiosystems`
+  also set `hf_split_sizes` to cap `train` at `100_000` (vs. the global
+  `1_000_000` default); validation/test stay at `10_000`. There is no per-task
+  budget ladder — each dataset is generated once at its largest useful size and
+  consumers subsample smaller budgets by indexing the dataset prefix (valid
+  because every `(θ, x)` row is an independent draw).
 
 ## Note on `diffusion-experiments/`
 
