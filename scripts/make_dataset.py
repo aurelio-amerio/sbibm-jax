@@ -1,0 +1,114 @@
+"""Build (and optionally upload) HuggingFace datasets for sbibm_jax tasks.
+
+Replaces SBI-benchmarks-data/make_dataset.py. Usage:
+
+    # Default repo, all available tasks, real upload:
+    uv run python scripts/make_dataset.py --all
+
+    # Explicit task list, dry-run (writes metadata.json, no HF push):
+    uv run python scripts/make_dataset.py --tasks gaussian_linear two_moons --dry-run
+
+    # Custom split sizes:
+    uv run python scripts/make_dataset.py --tasks two_moons \
+        --train-size 1000 --val-size 100 --test-size 100
+"""
+
+import argparse
+import logging
+import sys
+from pathlib import Path
+
+from sbibm_jax import get_available_tasks
+from sbibm_jax.hf import (
+    config,
+    make_metadata,
+    upload_dataset,
+    upload_metadata,
+)
+
+
+def parse_args(argv=None):
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument(
+        "--tasks",
+        nargs="+",
+        help="Explicit task names. Use --all for every registered task.",
+    )
+    p.add_argument(
+        "--all",
+        action="store_true",
+        help="Process every task returned by get_available_tasks().",
+    )
+    p.add_argument(
+        "--repo",
+        default=config.DEFAULT_REPO,
+        help=f"HuggingFace dataset repo (default: {config.DEFAULT_REPO}).",
+    )
+    p.add_argument(
+        "--metadata-path",
+        default="metadata.json",
+        help="Where to write metadata.json (default: ./metadata.json).",
+    )
+    p.add_argument("--train-size", type=int, default=None)
+    p.add_argument("--val-size", type=int, default=None)
+    p.add_argument("--test-size", type=int, default=None)
+    p.add_argument("--master-seed", type=int, default=config.DEFAULT_MASTER_SEED)
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Build metadata.json but skip all HF uploads.",
+    )
+    p.add_argument("--verbose", "-v", action="store_true")
+    return p.parse_args(argv)
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    logging.basicConfig(
+        level=logging.DEBUG if args.verbose else logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+
+    if args.all:
+        task_names = get_available_tasks()
+    elif args.tasks:
+        task_names = args.tasks
+    else:
+        print("ERROR: pass --tasks NAME [NAME ...] or --all", file=sys.stderr)
+        sys.exit(2)
+
+    build_opts = {}
+    if args.train_size is not None:
+        build_opts["train_size"] = args.train_size
+    if args.val_size is not None:
+        build_opts["val_size"] = args.val_size
+    if args.test_size is not None:
+        build_opts["test_size"] = args.test_size
+    build_opts["master_seed"] = args.master_seed
+
+    metadata_path = Path(args.metadata_path)
+    split_sizes = None
+    if any(k in build_opts for k in ("train_size", "val_size", "test_size")):
+        split_sizes = {
+            "train": build_opts.get(
+                "train_size", config.DEFAULT_SPLIT_SIZES["train"]),
+            "validation": build_opts.get(
+                "val_size", config.DEFAULT_SPLIT_SIZES["validation"]),
+            "test": build_opts.get(
+                "test_size", config.DEFAULT_SPLIT_SIZES["test"]),
+        }
+    make_metadata(task_names, output_path=metadata_path, split_sizes=split_sizes)
+    print(f"Wrote {metadata_path}")
+
+    if args.dry_run:
+        print("Dry run — skipping HF uploads.")
+        return
+
+    upload_metadata(str(metadata_path), args.repo)
+    for name in task_names:
+        print(f"Uploading dataset for task: {name}")
+        upload_dataset(args.repo, name, **build_opts)
+
+
+if __name__ == "__main__":
+    main()
