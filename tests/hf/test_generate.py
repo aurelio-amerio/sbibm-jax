@@ -103,3 +103,63 @@ class TestDefaultValidityPolicy:
                 _NaNTask(), jax.random.PRNGKey(0), n=4, chunk_size=4,
                 resample_invalid=False,
             )
+
+
+class TestResamplePolicy:
+    @staticmethod
+    def _make_partial_nan_task(nan_fraction: float):
+        """Stub task whose simulator returns NaN on a fixed fraction of rows."""
+
+        class _PartialNaN:
+            name = "partial_nan_stub"
+            dim_parameters = 1
+            dim_data = 1
+
+            def get_prior(self, key, num_samples=1):
+                return jax.random.uniform(key, (num_samples, 1))
+
+            def get_simulator(self, key, max_calls=None):
+                def sim(k, theta):
+                    n = theta.shape[0]
+                    u = jax.random.uniform(k, (n,))
+                    out = jnp.where(
+                        u < nan_fraction,
+                        jnp.full((n,), jnp.nan),
+                        theta[:, 0],
+                    ).reshape(n, 1)
+                    return out
+
+                sim.flatten_data = lambda x: x.reshape(-1, 1)
+                return sim
+
+        return _PartialNaN()
+
+    def test_resample_returns_exactly_n_finite_rows(self):
+        task = self._make_partial_nan_task(nan_fraction=0.3)
+        thetas, xs, stats = generate_samples(
+            task, jax.random.PRNGKey(0), n=20,
+            resample_invalid=True, chunk_size=8, max_factor=10.0,
+        )
+        assert thetas.shape == (20, 1)
+        assert xs.shape == (20, 1)
+        assert np.isfinite(thetas).all()
+        assert np.isfinite(xs).all()
+        assert stats["rejected"] > 0
+        assert 0.0 < stats["rejection_rate"] < 1.0
+
+    def test_resample_cap_raises(self):
+        # nan_fraction=1.0 means every row is NaN; cap is hit immediately.
+        task = self._make_partial_nan_task(nan_fraction=1.0)
+        with pytest.raises(ValueError, match="cap exceeded"):
+            generate_samples(
+                task, jax.random.PRNGKey(0), n=10,
+                resample_invalid=True, chunk_size=4, max_factor=2.0,
+            )
+
+    def test_default_policy_raises_with_count(self):
+        task = self._make_partial_nan_task(nan_fraction=0.5)
+        with pytest.raises(ValueError, match="non-finite"):
+            generate_samples(
+                task, jax.random.PRNGKey(0), n=8, chunk_size=8,
+                resample_invalid=False,
+            )
