@@ -35,6 +35,10 @@ class ToyLensing(Task):
             path=Path(__file__).parent.absolute(),
         )
 
+        # HF export hints: stored as (H, W) images via ImageExporter.
+        self.hf_data_kind = "image"
+        self.hf_data_shape = (resolution, resolution)
+
         self.prior_dist = dist.Independent(
             dist.Uniform(
                 low=jnp.array([0.1, 0.01]),

@@ -74,6 +74,8 @@ class SIR(Task):
             path=Path(__file__).parent.absolute(),
             observation_seeds=observation_seeds,
         )
+        # ODE divergences emit NaN rows; rejection-resample at HF export time.
+        self.hf_resample_invalid = True
 
         self.prior_params = {
             "loc": jnp.array([math.log(0.4), math.log(0.125)]),
