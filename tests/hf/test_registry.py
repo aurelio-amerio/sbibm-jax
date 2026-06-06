@@ -49,3 +49,17 @@ class TestRegistry:
         task.hf_data_kind = "tensor4d"
         with pytest.raises(ValueError, match="Unknown data_kind"):
             get_exporter(task)
+
+
+class TestRegistryRealTasks:
+    def test_grf_selects_image_exporter(self):
+        task = get_task("gaussian_random_field", field_size=8)
+        exp = get_exporter(task, train_size=4, val_size=2, test_size=2)
+        assert isinstance(exp, ImageExporter)
+        assert exp.data_shape == (8, 8)
+
+    def test_grf_default_field_size_32(self):
+        task = get_task("gaussian_random_field")
+        exp = get_exporter(task, train_size=4, val_size=2, test_size=2)
+        assert isinstance(exp, ImageExporter)
+        assert exp.data_shape == (32, 32)
