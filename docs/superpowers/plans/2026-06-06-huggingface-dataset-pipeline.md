@@ -16,12 +16,14 @@
 
 ## Handoff / Current Status (updated 2026-06-06)
 
-> **Read this first if you are resuming.** Execute the remaining tasks with
-> **superpowers:subagent-driven-development** (fresh implementer subagent per
-> task, then spec-compliance review, then code-quality review). Start at
-> **Task 3**.
+> **✅ IMPLEMENTATION COMPLETE (all 14 tasks + 6b done).** Executed via
+> **superpowers:subagent-driven-development** on 2026-06-06: fresh implementer
+> subagent per task, spec + code-quality review per task (rigorous on Tasks 7 and
+> 13), then a final holistic review (verdict: SHIP). `tests/hf/` → **58 passed**;
+> full suite `pytest -m "not slow"` → **178 passed, 3 skipped, 0 failed**. Next
+> step is integration of the branch (merge/PR), not further implementation.
 >
-> **Worktree to resume in:** `hf-dataset-pipeline-impl`
+> **Worktree:** `hf-dataset-pipeline-impl`
 > — path `/lustre/ific.uv.es/ml/ific088/github/sbibm-jax/.claude/worktrees/hf-dataset-pipeline-impl`,
 > branch `worktree-hf-dataset-pipeline-impl` (the merge that pulled in `toy_lensing`
 > is commit `49baecf`). `git worktree list` shows it; `cd` there and run all
@@ -35,19 +37,20 @@
 | --- | --- | --- |
 | 1 — `[hf]` extra + package scaffold | ✅ DONE | `c06d19a` |
 | 2 — `DatasetExporter` base + `VectorExporter` (all 3 subclasses live in `exporter.py`) | ✅ DONE | `fd513cb` |
-| 3 — `ImageExporter` tests | ⬜ TODO (next) | — |
-| 4 — `TimeSeriesExporter` tests | ⬜ TODO | — |
-| 5 — Registry + `get_exporter` | ⬜ TODO | — |
-| 6 — GRF image hints | ⬜ TODO | — |
-| **6b — Toy Lensing image hints (NEW)** | ⬜ TODO | — |
-| 7 — Generation: seeding + chunking | ⬜ TODO | — |
-| 8 — Generation: resample policy | ⬜ TODO | — |
-| 9 — `hf_resample_invalid` on ODE/PEtab tasks | ⬜ TODO | — |
-| 10 — Reference block loader | ⬜ TODO | — |
-| 11 — `make_metadata` | ⬜ TODO | — |
-| 12 — Upload helpers | ⬜ TODO | — |
-| 13 — `build_dataset` orchestration + integration | ⬜ TODO | — |
-| 14 — Driver script | ⬜ TODO | — |
+| 3 — `ImageExporter` tests | ✅ DONE | `656776a` |
+| 4 — `TimeSeriesExporter` tests | ✅ DONE | `cd91864` |
+| 5 — Registry + `get_exporter` | ✅ DONE | `f88c0d3` |
+| 6 — GRF image hints | ✅ DONE | `a668cba` |
+| **6b — Toy Lensing image hints (NEW)** | ✅ DONE | `f735346` |
+| 7 — Generation: seeding + chunking | ✅ DONE | `019bba7` |
+| 8 — Generation: resample policy | ✅ DONE | `2e17187` |
+| 9 — `hf_resample_invalid` on ODE/PEtab tasks | ✅ DONE | `0883311` |
+| 10 — Reference block loader | ✅ DONE | `6773b5c` |
+| 11 — `make_metadata` | ✅ DONE | `feba4f7` |
+| 12 — Upload helpers | ✅ DONE | `331be2f` |
+| 13 — `build_dataset` orchestration + integration | ✅ DONE | `e691d3e` |
+| 14 — Driver script | ✅ DONE | `20e2229` |
+| Final — public-API docstring tidy + holistic review (SHIP) | ✅ DONE | `1c9fc65` |
 
 **Branch & worktree:**
 - Working in the git worktree at
@@ -82,9 +85,14 @@
   project environment path .venv and will be ignored`. It points at the main
   checkout's `.venv`; ignore it.
 
-**Last verified test status:**
-`uv run pytest tests/hf/ tests/tasks/test_toy_lensing.py -q` → **29 passed**
-(6 hf + 23 toy_lensing).
+**Last verified test status (on completion, 2026-06-06):**
+`uv run pytest tests/hf/ -q` → **58 passed**; full suite
+`uv run pytest -m "not slow"` → **178 passed, 3 skipped, 0 failed**.
+Known non-blocking nits: 15 `E501` line-length warnings in the new `hf` package
+(repo has no flake8 config and ~117 pre-existing E501 in `src`; not a regression);
+`Dataset.from_generator` caching can return stale rows only if a task's simulator
+*method source* is edited without changing its attributes while reusing a
+persistent `~/.cache/huggingface` (inherent to `from_generator`, not a defect).
 
 **What changed vs. the original plan:**
 - `toy_lensing` is now a real in-tree task (it did not exist when this plan was
