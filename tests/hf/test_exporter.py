@@ -1,0 +1,44 @@
+"""Tests for DatasetExporter and its data-kind subclasses."""
+
+import numpy as np
+import pytest
+from datasets import Array2D, Features, List, Value
+
+from sbibm_jax import get_task
+from sbibm_jax.hf.exporter import (
+    DatasetExporter,
+    ImageExporter,
+    TimeSeriesExporter,
+    VectorExporter,
+)
+
+
+class TestVectorExporter:
+    def test_data_kind(self):
+        task = get_task("gaussian_linear")
+        exp = VectorExporter(task, train_size=4, val_size=2, test_size=2)
+        assert exp.data_kind == "vector"
+
+    def test_features_schema(self):
+        task = get_task("gaussian_linear")
+        exp = VectorExporter(task, train_size=4, val_size=2, test_size=2)
+        feats = exp.features()
+        assert isinstance(feats, Features)
+        assert isinstance(feats["xs"], List)
+        assert isinstance(feats["xs"].feature, Value)
+        assert feats["xs"].feature.dtype == "float32"
+        assert isinstance(feats["thetas"], List)
+        assert feats["thetas"].feature.dtype == "float32"
+
+    def test_shape_x_identity(self):
+        task = get_task("gaussian_linear")
+        exp = VectorExporter(task, train_size=4, val_size=2, test_size=2)
+        flat = np.zeros((3, task.dim_data), dtype=np.float32)
+        out = exp.shape_x(flat)
+        assert out.shape == (3, task.dim_data)
+        assert out.dtype == np.float32
+
+    def test_base_class_is_abstract(self):
+        task = get_task("gaussian_linear")
+        with pytest.raises(TypeError):
+            DatasetExporter(task, train_size=1, val_size=1, test_size=1)
