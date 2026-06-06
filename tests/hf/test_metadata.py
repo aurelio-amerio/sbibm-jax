@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from sbibm_jax.hf.metadata import make_metadata
+from sbibm_jax.hf.metadata import make_metadata, merge_metadata
 
 
 class TestMakeMetadata:
@@ -41,3 +41,23 @@ class TestMakeMetadata:
         assert out.exists()
         loaded = json.loads(out.read_text())
         assert loaded == meta
+
+
+class TestMergeMetadata:
+    def test_disjoint_keys_union(self):
+        assert merge_metadata({"a": 1}, {"b": 2}) == {"a": 1, "b": 2}
+
+    def test_local_overrides_shared_key(self):
+        assert merge_metadata({"a": 1}, {"a": 2}) == {"a": 2}
+
+    def test_empty_remote_returns_local(self):
+        assert merge_metadata({}, {"a": 1}) == {"a": 1}
+
+    def test_empty_local_returns_remote(self):
+        assert merge_metadata({"a": 1}, {}) == {"a": 1}
+
+    def test_does_not_mutate_inputs(self):
+        remote, local = {"a": 1}, {"b": 2}
+        merge_metadata(remote, local)
+        assert remote == {"a": 1}
+        assert local == {"b": 2}

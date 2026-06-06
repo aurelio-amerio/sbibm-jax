@@ -53,3 +53,13 @@ def make_metadata(
         Path(output_path).write_text(json.dumps(meta, indent=4))
 
     return meta
+
+
+def merge_metadata(remote: dict, local: dict) -> dict:
+    """Merge freshly-built ``local`` entries over ``remote``.
+
+    Tasks present in ``local`` overwrite their own entries; every other task
+    already documented in ``remote`` is preserved. Pure — no I/O, no mutation
+    of the inputs.
+    """
+    return {**remote, **local}
