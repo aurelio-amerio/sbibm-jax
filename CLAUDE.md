@@ -60,6 +60,9 @@ to target production (`config.DEFAULT_REPO`). Each run prints a `Target repo: �
 `metadata.json` is fetched and merged so untouched tasks are preserved, and the
 local `metadata.json` is deleted after a successful real upload.
 
+Pass `--chunk-size N` to shrink the per-chunk generation batch if a GPU OOMs
+on large image tasks (e.g. `gaussian_random_field_256`).
+
 ## Architecture
 
 **Task abstraction.** `src/sbibm_jax/tasks/task.py` defines the abstract `Task`
@@ -84,7 +87,8 @@ simulator as a closure inside `get_simulator` and return
 **Registry.** `src/sbibm_jax/tasks/__init__.py` maps task-name strings to classes
 in `get_task()`, with lazy per-branch imports. Some names are aliases/variants of
 the same class passing different kwargs (e.g. `slcp_distractors` → `SLCP(distractors=True)`,
-`bernoulli_glm_raw` → `BernoulliGLM(summary="raw")`, `gaussian_nonlinear` → `SLCP`).
+`bernoulli_glm_raw` → `BernoulliGLM(summary="raw")`, `gaussian_nonlinear` → `SLCP`,
+`gaussian_random_field_256` → `GaussianRandomField(field_size=256)`).
 `get_available_tasks()` discovers task directories on disk and appends these
 extra variant names. The top-level `sbibm_jax` package re-exports `get_task` and
 `get_available_tasks`.
@@ -139,7 +143,12 @@ live in `hf/config.py`; `scripts/make_dataset.py` is the only CLI entry point.
   2-D `hf_data_shape`; ODE/PEtab tasks set `hf_resample_invalid=True`. The
   expensive tasks `toy_lensing`, `gaussian_random_field`, and `beer_molbiosystems`
   also set `hf_split_sizes` to cap `train` at `100_000` (vs. the global
-  `1_000_000` default); validation/test stay at `10_000`. There is no per-task
+  `1_000_000` default); validation/test stay at `10_000`. The
+  `gaussian_random_field_256` alias is a 256×256 high-resolution variant of
+  `gaussian_random_field` (same `hf_split_sizes` cap of `100_000` train); each
+  256×256 float32 row is ~256 KiB, so its train split is ~25 GiB on disk —
+  generated incrementally via the chunked `Dataset.from_generator` streaming,
+  never held whole in RAM. There is no per-task
   budget ladder — each dataset is generated once at its largest useful size and
   consumers subsample smaller budgets by indexing the dataset prefix (valid
   because every `(θ, x)` row is an independent draw).
