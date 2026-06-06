@@ -49,9 +49,15 @@ class ToyLensing(Task):
         return self.prior_dist.sample(key, (num_samples,))
 
     def get_simulator(
-        self, key: jax.random.PRNGKey, max_calls: Optional[int] = None
+        self, key: jax.random.PRNGKey, max_calls: Optional[int] = None  # noqa: ARG002
     ) -> Simulator:
+        # key is unused here; it is consumed by the returned Simulator.__call__
         N = self.resolution
+        n_lines = 20
+        line_amplitude = 0.8
+        line_width = 0.01
+        noise_std = 0.3
+
         x = jnp.linspace(-2, 2, N)
         X, Y = jnp.meshgrid(x, x)
 
@@ -66,16 +72,17 @@ class ToyLensing(Task):
             R = jnp.sqrt((X - x0) ** 2 + (Y - y0) ** 2)
             mu = jnp.exp(-(R - r) ** 2 / (w ** 2 * 2))
 
-            xr = jax.random.uniform(k_lines, (20, 2))
+            xr = jax.random.uniform(k_lines, (n_lines, 2))
 
             def line(xr_i):
-                return 0.8 * jnp.exp(
-                    -(X * xr_i[0] + Y * (1 - xr_i[0]) - xr_i[1]) ** 2 / 0.01 ** 2
+                return line_amplitude * jnp.exp(
+                    -(X * xr_i[0] + Y * (1 - xr_i[0]) - xr_i[1]) ** 2 / line_width ** 2
                 )
 
             mu = mu + jnp.sum(jax.vmap(line)(xr), axis=0)
-            mu = (mu - jnp.mean(mu)) / jnp.std(mu)
-            img = mu + jax.random.normal(k_noise, (N, N)) * 0.3
+            std_mu = jnp.std(mu)
+            mu = (mu - jnp.mean(mu)) / jnp.where(std_mu > 0, std_mu, 1.0)
+            img = mu + jax.random.normal(k_noise, (N, N)) * noise_std
             return img
 
         def simulator(key, parameters):
