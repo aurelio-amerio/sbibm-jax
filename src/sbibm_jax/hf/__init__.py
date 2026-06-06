@@ -4,8 +4,8 @@ Requires the optional `[hf]` extra (`datasets`, `huggingface_hub`). Importing
 this subpackage without the extra raises an informative ImportError that points
 at `pip install sbibm-jax[hf]`, mirroring the existing `pypesto` extra pattern.
 
-Public API (re-exported below): build_dataset, upload_dataset, make_metadata,
-get_exporter.
+Public API (re-exported below): build_dataset, get_exporter, make_metadata,
+upload_dataset, upload_metadata, config.
 """
 
 try:
