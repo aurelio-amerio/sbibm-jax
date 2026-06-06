@@ -50,8 +50,15 @@ through the thin driver `scripts/make_dataset.py`:
 ```bash
 # Write metadata.json only, no HF push (custom split sizes):
 uv run python scripts/make_dataset.py --tasks two_moons --train-size 1000 --dry-run
-uv run python scripts/make_dataset.py --all          # every registered task, real upload
+uv run python scripts/make_dataset.py --all            # every task -> TEST repo
+uv run python scripts/make_dataset.py --all --prod     # every task -> PRODUCTION repo
 ```
+
+Uploads target the **test** repo (`config.TEST_REPO`) by default; pass `--prod`
+to target production (`config.DEFAULT_REPO`). Each run prints a `Target repo: …
+(TEST|PRODUCTION)` banner. Subset uploads are non-destructive: the remote
+`metadata.json` is fetched and merged so untouched tasks are preserved, and the
+local `metadata.json` is deleted after a successful real upload.
 
 ## Architecture
 
