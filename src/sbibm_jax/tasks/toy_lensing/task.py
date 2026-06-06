@@ -49,7 +49,7 @@ class ToyLensing(Task):
         return self.prior_dist.sample(key, (num_samples,))
 
     def get_simulator(
-        self, key: jax.random.PRNGKey, max_calls: Optional[int] = None  # noqa: ARG002
+        self, key: jax.random.PRNGKey, max_calls: Optional[int] = None
     ) -> Simulator:
         # key is unused here; it is consumed by the returned Simulator.__call__
         N = self.resolution
