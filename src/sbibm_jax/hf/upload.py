@@ -1,11 +1,15 @@
 """HuggingFace upload helpers — isolated so tests can monkeypatch.
 
-`upload_file` and `push_to_hub` are the only network surface. Both are imported
-at module scope so monkeypatching `sbibm_jax.hf.upload.upload_file` (and the
-shadowing of `build_dataset` here) is sufficient for any test.
+`upload_file`, `hf_hub_download`, and `push_to_hub` are the network surface.
+`upload_file` and `hf_hub_download` are imported at module scope so
+monkeypatching them on `sbibm_jax.hf.upload` (and the shadowing of
+`build_dataset` here) is sufficient for any test.
 """
 
-from huggingface_hub import upload_file
+import json
+
+from huggingface_hub import hf_hub_download, upload_file
+from huggingface_hub.utils import EntryNotFoundError, RepositoryNotFoundError
 
 from sbibm_jax.hf.build import build_dataset
 
@@ -18,6 +22,28 @@ def upload_metadata(file_path: str, repo_name: str) -> None:
         repo_id=repo_name,
         repo_type="dataset",
     )
+
+
+def fetch_remote_metadata(repo_name: str) -> dict:
+    """Return the repo's existing metadata.json as a dict, or {} if absent.
+
+    Downloads with force_download to avoid a stale local cache. A missing file
+    (EntryNotFoundError) or a non-existent repo (RepositoryNotFoundError) is
+    treated as "no remote metadata" and returns {}. Any other error (auth,
+    HTTP/connection) propagates — a transient failure must never be silently
+    treated as an empty remote, which would drop sibling task entries on merge.
+    """
+    try:
+        local_path = hf_hub_download(
+            repo_id=repo_name,
+            filename="metadata.json",
+            repo_type="dataset",
+            force_download=True,
+        )
+    except (EntryNotFoundError, RepositoryNotFoundError):
+        return {}
+    with open(local_path) as f:
+        return json.load(f)
 
 
 def upload_dataset(repo_name: str, task_name: str, **build_opts) -> None:

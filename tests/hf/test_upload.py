@@ -1,9 +1,16 @@
 """Tests for hf.upload — monkeypatched, no real HF calls."""
 
+import json
 import pytest
 
+from huggingface_hub.utils import EntryNotFoundError, RepositoryNotFoundError
+
 import sbibm_jax.hf.upload as upload_mod
-from sbibm_jax.hf.upload import upload_dataset, upload_metadata
+from sbibm_jax.hf.upload import (
+    fetch_remote_metadata,
+    upload_dataset,
+    upload_metadata,
+)
 
 
 class _FakeDataset:
@@ -102,3 +109,31 @@ class TestUploadDataset:
         assert train.push_calls[0][1]["config_name"] == "gaussian_random_field"
         assert val.push_calls[0][1]["split"] == "validation"
         # No assertion needed for "ref" - it does not exist (would have raised).
+
+
+class TestFetchRemoteMetadata:
+    def test_returns_parsed_dict(self, monkeypatch, tmp_path):
+        f = tmp_path / "metadata.json"
+        f.write_text(json.dumps({"two_moons": {"dim": 2}}))
+        monkeypatch.setattr(
+            upload_mod, "hf_hub_download", lambda **kw: str(f))
+        assert fetch_remote_metadata("user/repo") == {"two_moons": {"dim": 2}}
+
+    def test_entry_not_found_returns_empty(self, monkeypatch):
+        def boom(**kw):
+            raise EntryNotFoundError.__new__(EntryNotFoundError)
+        monkeypatch.setattr(upload_mod, "hf_hub_download", boom)
+        assert fetch_remote_metadata("user/repo") == {}
+
+    def test_repo_not_found_returns_empty(self, monkeypatch):
+        def boom(**kw):
+            raise RepositoryNotFoundError.__new__(RepositoryNotFoundError)
+        monkeypatch.setattr(upload_mod, "hf_hub_download", boom)
+        assert fetch_remote_metadata("user/repo") == {}
+
+    def test_other_error_propagates(self, monkeypatch):
+        def boom(**kw):
+            raise ValueError("transient network error")
+        monkeypatch.setattr(upload_mod, "hf_hub_download", boom)
+        with pytest.raises(ValueError):
+            fetch_remote_metadata("user/repo")
