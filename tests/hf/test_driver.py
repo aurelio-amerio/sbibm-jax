@@ -154,3 +154,42 @@ def test_dry_run_keeps_local_and_skips_network(monkeypatch, tmp_path):
     mod.main(["--tasks", "gaussian_linear", "--metadata-path", str(out),
               "--dry-run"])
     assert out.exists()  # kept for inspection
+
+
+def test_chunk_size_forwarded_to_upload(monkeypatch, tmp_path):
+    mod = _load_driver()
+    out = tmp_path / "metadata.json"
+
+    monkeypatch.setattr(mod, "fetch_remote_metadata", lambda repo: {})
+    monkeypatch.setattr(mod, "upload_metadata", lambda path, repo: None)
+
+    upload_opts = {}
+
+    def fake_upload_dataset(repo, name, **opts):
+        upload_opts[name] = opts
+
+    monkeypatch.setattr(mod, "upload_dataset", fake_upload_dataset)
+
+    mod.main(["--tasks", "gaussian_linear", "--chunk-size", "256",
+              "--metadata-path", str(out)])
+
+    assert upload_opts["gaussian_linear"]["chunk_size"] == 256
+
+
+def test_chunk_size_absent_by_default(monkeypatch, tmp_path):
+    mod = _load_driver()
+    out = tmp_path / "metadata.json"
+
+    monkeypatch.setattr(mod, "fetch_remote_metadata", lambda repo: {})
+    monkeypatch.setattr(mod, "upload_metadata", lambda path, repo: None)
+
+    upload_opts = {}
+
+    def fake_upload_dataset(repo, name, **opts):
+        upload_opts[name] = opts
+
+    monkeypatch.setattr(mod, "upload_dataset", fake_upload_dataset)
+
+    mod.main(["--tasks", "gaussian_linear", "--metadata-path", str(out)])
+
+    assert "chunk_size" not in upload_opts["gaussian_linear"]

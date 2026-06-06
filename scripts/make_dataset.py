@@ -64,6 +64,16 @@ def parse_args(argv=None):
     p.add_argument("--train-size", type=int, default=None)
     p.add_argument("--val-size", type=int, default=None)
     p.add_argument("--test-size", type=int, default=None)
+    p.add_argument(
+        "--chunk-size",
+        type=int,
+        default=None,
+        help=(
+            "Per-chunk generation batch size (rows). Lower it if a GPU "
+            "OOMs on large image tasks; defaults to "
+            "config.DEFAULT_CHUNK_SIZE."
+        ),
+    )
     p.add_argument("--master-seed", type=int, default=config.DEFAULT_MASTER_SEED)
     p.add_argument(
         "--dry-run",
@@ -100,6 +110,8 @@ def main(argv=None):
         build_opts["val_size"] = args.val_size
     if args.test_size is not None:
         build_opts["test_size"] = args.test_size
+    if args.chunk_size is not None:
+        build_opts["chunk_size"] = args.chunk_size
     build_opts["master_seed"] = args.master_seed
 
     metadata_path = Path(args.metadata_path)
