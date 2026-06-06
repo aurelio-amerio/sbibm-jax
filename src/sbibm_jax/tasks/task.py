@@ -20,7 +20,6 @@ class Task:
         name: str,
         num_observations: int,
         num_posterior_samples: int,
-        num_simulations: List[int],
         path: Path,
         name_display: Optional[str] = None,
         num_reference_posterior_samples: Optional[int] = None,
@@ -34,7 +33,6 @@ class Task:
             name: Name of task (matches folder name).
             num_observations: Number of different observations.
             num_posterior_samples: Number of posterior samples to generate.
-            num_simulations: List of simulation budget sizes.
             path: Path to task folder.
             name_display: Display name with proper casing/spacing.
             num_reference_posterior_samples: Number of reference posterior
@@ -47,7 +45,6 @@ class Task:
         self.name = name
         self.num_observations = num_observations
         self.num_posterior_samples = num_posterior_samples
-        self.num_simulations = num_simulations
         self.path = path
 
         self.name_display = name_display if name_display is not None else name

@@ -34,6 +34,12 @@ class TestMakeMetadata:
         assert m["data_kind"] == "image"
         assert m["data_shape"] == [32, 32]
         assert m["has_reference"] is False
+        # Per-task hf_split_sizes override: capped at 100k train.
+        assert m["splits"] == {
+            "train": 100_000,
+            "validation": 10_000,
+            "test": 10_000,
+        }
 
     def test_writes_json_file(self, tmp_path):
         out = tmp_path / "metadata.json"

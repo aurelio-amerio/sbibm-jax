@@ -33,13 +33,17 @@ class GaussianRandomField(Task):
             num_observations=10,
             num_posterior_samples=10000,
             num_reference_posterior_samples=10000,
-            num_simulations=[1000, 10000, 100000, 1000000],
             path=Path(__file__).parent.absolute(),
         )
 
         # HF export hints: stored as (H, W) images via ImageExporter.
         self.hf_data_kind = "image"
         self.hf_data_shape = (field_size, field_size)
+        # Cap HF generation at 100k train (large image rows); consumers
+        # subsample smaller budgets by indexing the dataset prefix.
+        self.hf_split_sizes = {
+            "train": 100_000, "validation": 10_000, "test": 10_000,
+        }
 
         self.prior_dist = dist.Independent(
             dist.Normal(

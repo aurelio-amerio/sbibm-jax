@@ -56,11 +56,15 @@ class BeerMolBioSystems(Task):
             num_observations=10,
             num_posterior_samples=10000,
             num_reference_posterior_samples=10000,
-            num_simulations=[1000, 10000, 100000, 1000000],
             path=Path(__file__).parent.absolute(),
         )
         # AMICI failures emit full NaN rows; rejection-resample at HF export time.
         self.hf_resample_invalid = True
+        # Cap HF generation at 100k train (expensive simulator); consumers
+        # subsample smaller budgets by indexing the dataset prefix.
+        self.hf_split_sizes = {
+            "train": 100_000, "validation": 10_000, "test": 10_000,
+        }
         # Lazily built, cached pypesto/AMICI handles.
         self._loaded = None
 

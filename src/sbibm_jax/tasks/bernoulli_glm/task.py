@@ -39,7 +39,6 @@ class BernoulliGLM(Task):
             dim_data=dim_data,
             name=name,
             name_display=name_display,
-            num_simulations=[1000, 10000, 100000, 1000000],
             num_posterior_samples=10000,
             num_observations=10,
             path=Path(__file__).parent.absolute(),

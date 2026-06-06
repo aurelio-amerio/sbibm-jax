@@ -54,7 +54,6 @@ class LotkaVolterra(Task):
             num_observations=len(observation_seeds),
             num_posterior_samples=10000,
             num_reference_posterior_samples=10000,
-            num_simulations=[100, 1000, 10000, 100000, 1000000],
             path=Path(__file__).parent.absolute(),
             observation_seeds=observation_seeds,
         )
