@@ -18,5 +18,6 @@ except ImportError as e:
     ) from e
 
 from sbibm_jax.hf import config  # noqa: E402
+from sbibm_jax.hf.registry import get_exporter  # noqa: E402
 
-__all__ = ["config"]
+__all__ = ["config", "get_exporter"]
