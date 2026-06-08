@@ -29,8 +29,8 @@ class TestPrior:
 
     def test_metadata(self):
         task = GaussianRandomField(field_size=16)
-        assert task.dim_parameters == 2
-        assert task.dim_data == 16 * 16
+        assert task.dim_theta == 2
+        assert task.dim_x == 16 * 16
         assert task.name == "gaussian_random_field"
 
 
@@ -189,13 +189,13 @@ class TestRegistry:
 
         task = get_task("gaussian_random_field")
         assert isinstance(task, GaussianRandomField)
-        assert task.dim_data == 32 * 32  # default field_size=32
+        assert task.dim_x == 32 * 32  # default field_size=32
 
     def test_get_task_passes_kwargs(self):
         from sbibm_jax import get_task
 
         task = get_task("gaussian_random_field", field_size=16)
-        assert task.dim_data == 16 * 16
+        assert task.dim_x == 16 * 16
 
     def test_available_tasks_includes_grf(self):
         from sbibm_jax import get_available_tasks
@@ -258,7 +258,7 @@ class TestNameOverride:
         assert t.name == "gaussian_random_field_256"
         assert t.name_display == "Gaussian Random Field (256x256)"
         assert t.field_size == 256
-        assert t.dim_data == 256 * 256
+        assert t.dim_x == 256 * 256
 
 
 class TestHighResVariant:
@@ -268,7 +268,7 @@ class TestHighResVariant:
         assert task.name == "gaussian_random_field_256"
         assert task.name_display == "Gaussian Random Field (256x256)"
         assert task.field_size == 256
-        assert task.dim_data == 256 * 256
+        assert task.dim_x == 256 * 256
         assert task.hf_data_kind == "image"
         assert task.hf_data_shape == (256, 256)
         assert task.hf_split_sizes == {

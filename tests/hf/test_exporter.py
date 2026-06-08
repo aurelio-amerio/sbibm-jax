@@ -33,9 +33,9 @@ class TestVectorExporter:
     def test_shape_x_identity(self):
         task = get_task("gaussian_linear")
         exp = VectorExporter(task, train_size=4, val_size=2, test_size=2)
-        flat = np.zeros((3, task.dim_data), dtype=np.float32)
+        flat = np.zeros((3, task.dim_x), dtype=np.float32)
         out = exp.shape_x(flat)
-        assert out.shape == (3, task.dim_data)
+        assert out.shape == (3, task.dim_x)
         assert out.dtype == np.float32
 
     def test_base_class_is_abstract(self):

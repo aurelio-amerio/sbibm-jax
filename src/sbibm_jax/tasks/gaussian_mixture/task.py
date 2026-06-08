@@ -23,8 +23,8 @@ class GaussianMixture(Task):
             prior_bound: Prior is uniform in [-prior_bound, +prior_bound].
         """
         super().__init__(
-            dim_parameters=dim,
-            dim_data=dim,
+            dim_theta=dim,
+            dim_x=dim,
             name=Path(__file__).parent.name,
             name_display="Gaussian Mixture",
             num_observations=10,
@@ -34,8 +34,8 @@ class GaussianMixture(Task):
         )
 
         self.prior_params = {
-            "low": -prior_bound * jnp.ones((self.dim_parameters,)),
-            "high": +prior_bound * jnp.ones((self.dim_parameters,)),
+            "low": -prior_bound * jnp.ones((self.dim_theta,)),
+            "high": +prior_bound * jnp.ones((self.dim_theta,)),
         }
         self.prior_dist = dist.Independent(
             dist.Uniform(

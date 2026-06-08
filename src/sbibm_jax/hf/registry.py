@@ -32,7 +32,7 @@ def get_exporter(
 
     Hint attributes (all optional, read via getattr with safe defaults):
         hf_data_kind:        "vector" | "image" | "timeseries" (default "vector")
-        hf_data_shape:       tuple[int, ...]  (default (task.dim_data,))
+        hf_data_shape:       tuple[int, ...]  (default (task.dim_x,))
         hf_resample_invalid: bool             (default False)
         hf_split_sizes:      dict             (default config.DEFAULT_SPLIT_SIZES)
 
@@ -46,7 +46,7 @@ def get_exporter(
             f"known kinds: {sorted(DATA_KIND_REGISTRY)}."
         )
 
-    data_shape = getattr(task, "hf_data_shape", (task.dim_data,))
+    data_shape = getattr(task, "hf_data_shape", (task.dim_x,))
     resample_invalid = getattr(task, "hf_resample_invalid", False)
     task_split_sizes = getattr(task, "hf_split_sizes", config.DEFAULT_SPLIT_SIZES)
 

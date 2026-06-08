@@ -47,8 +47,8 @@ class TestChunkedGeneration:
         ))
         thetas = np.concatenate([c[0] for c in chunks], axis=0)
         xs = np.concatenate([c[1] for c in chunks], axis=0)
-        assert thetas.shape == (10, task.dim_parameters)
-        assert xs.shape == (10, task.dim_data)
+        assert thetas.shape == (10, task.dim_theta)
+        assert xs.shape == (10, task.dim_x)
 
     def test_generate_samples_shapes_and_dtype(self):
         task = get_task("two_moons")
@@ -56,8 +56,8 @@ class TestChunkedGeneration:
         thetas, xs, stats = generate_samples(
             task, key, n=8, chunk_size=4,
         )
-        assert thetas.shape == (8, task.dim_parameters)
-        assert xs.shape == (8, task.dim_data)
+        assert thetas.shape == (8, task.dim_theta)
+        assert xs.shape == (8, task.dim_x)
         assert thetas.dtype == np.float32
         assert xs.dtype == np.float32
         assert stats["rejected"] == 0
@@ -85,8 +85,8 @@ class TestDefaultValidityPolicy:
         # A tiny stub task that emits NaN rows under the default policy.
         class _NaNTask:
             name = "nan_stub"
-            dim_parameters = 1
-            dim_data = 1
+            dim_theta = 1
+            dim_x = 1
 
             def get_prior(self, key, num_samples=1):
                 return jnp.zeros((num_samples, 1))
@@ -112,8 +112,8 @@ class TestResamplePolicy:
 
         class _PartialNaN:
             name = "partial_nan_stub"
-            dim_parameters = 1
-            dim_data = 1
+            dim_theta = 1
+            dim_x = 1
 
             def get_prior(self, key, num_samples=1):
                 return jax.random.uniform(key, (num_samples, 1))

@@ -16,8 +16,8 @@ class TestMakeMetadata:
     def test_vector_task_schema(self):
         meta = make_metadata(["gaussian_linear"])
         m = meta["gaussian_linear"]
-        assert m["dim_parameters"] == 10
-        assert m["dim_data"] == 10
+        assert m["dim_theta"] == 10
+        assert m["dim_x"] == 10
         assert m["data_kind"] == "vector"
         assert m["data_shape"] == [10]
         assert m["splits"] == {
@@ -57,7 +57,7 @@ class TestMakeMetadata:
         m = meta["gaussian_random_field_256"]
         assert m["data_kind"] == "image"
         assert m["data_shape"] == [256, 256]
-        assert m["dim_data"] == 256 * 256
+        assert m["dim_x"] == 256 * 256
         assert m["has_reference"] is False
         assert m["splits"] == {
             "train": 100_000, "validation": 10_000, "test": 10_000,

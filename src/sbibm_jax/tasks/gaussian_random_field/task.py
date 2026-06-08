@@ -34,8 +34,8 @@ class GaussianRandomField(Task):
         """
         self.field_size = field_size
         super().__init__(
-            dim_parameters=2,
-            dim_data=field_size * field_size,
+            dim_theta=2,
+            dim_x=field_size * field_size,
             name=name or Path(__file__).parent.name,
             name_display=name_display or "Gaussian Random Field",
             num_observations=10,
@@ -125,7 +125,7 @@ class GaussianRandomField(Task):
         This is the exact reference: run the simulator at a fixed theta_o.
         theta_o comes from the observation seed (num_observation) or is passed
         directly as `observation` (the role-inverted conditioning parameters).
-        Returns shape (num_samples, dim_data) in field space.
+        Returns shape (num_samples, dim_x) in field space.
         """
         assert (num_observation is None) != (observation is None), (
             "Provide exactly one of num_observation or observation."
@@ -137,7 +137,7 @@ class GaussianRandomField(Task):
 
         simulator = self.get_simulator(key)
         thetas = jnp.broadcast_to(
-            theta_o.reshape(1, -1), (num_samples, self.dim_parameters)
+            theta_o.reshape(1, -1), (num_samples, self.dim_theta)
         )
         return simulator(key, thetas)
 

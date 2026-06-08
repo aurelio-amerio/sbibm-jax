@@ -26,8 +26,8 @@ class TestBuildVector:
     def test_dtype_and_finiteness(self):
         bundle = build_dataset("gaussian_linear", **SMALL_OPTS)
         sample = bundle["train"][0]
-        assert len(sample["thetas"]) == 10  # gaussian_linear dim_parameters
-        assert len(sample["xs"]) == 10  # gaussian_linear dim_data
+        assert len(sample["thetas"]) == 10  # gaussian_linear dim_theta
+        assert len(sample["xs"]) == 10  # gaussian_linear dim_x
         arr = np.asarray(sample["xs"], dtype=np.float64)
         assert np.isfinite(arr).all()
 

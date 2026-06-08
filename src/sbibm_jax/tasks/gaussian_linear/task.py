@@ -25,8 +25,8 @@ class GaussianLinear(Task):
             simulator_scale: Standard deviation of simulator noise.
         """
         super().__init__(
-            dim_parameters=dim,
-            dim_data=dim,
+            dim_theta=dim,
+            dim_x=dim,
             name=Path(__file__).parent.name,
             name_display="Gaussian Linear",
             num_observations=10,
@@ -36,9 +36,9 @@ class GaussianLinear(Task):
         )
 
         self.prior_params = {
-            "loc": jnp.zeros((self.dim_parameters,)),
+            "loc": jnp.zeros((self.dim_theta,)),
             "precision_matrix": jnp.linalg.inv(
-                prior_scale * jnp.eye(self.dim_parameters)
+                prior_scale * jnp.eye(self.dim_theta)
             ),
         }
         self.prior_dist = dist.MultivariateNormal(
@@ -48,7 +48,7 @@ class GaussianLinear(Task):
 
         self.simulator_params = {
             "precision_matrix": jnp.linalg.inv(
-                simulator_scale * jnp.eye(self.dim_parameters)
+                simulator_scale * jnp.eye(self.dim_theta)
             ),
         }
 
@@ -121,7 +121,7 @@ class GaussianLinear(Task):
             observation: Direct observation array.
 
         Returns:
-            Samples of shape (num_samples, dim_parameters).
+            Samples of shape (num_samples, dim_theta).
         """
         posterior = self._get_reference_posterior(
             num_observation=num_observation,

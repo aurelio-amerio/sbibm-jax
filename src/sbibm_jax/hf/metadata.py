@@ -26,8 +26,8 @@ def make_metadata(
     so the recorded ``splits`` always match what the uploaded dataset contains.
 
     Schema per task:
-        dim_parameters: int
-        dim_data:       int
+        dim_theta:      int
+        dim_x:          int
         data_kind:      "vector" | "image" | "timeseries"
         data_shape:     list[int]
         splits:         dict[str, int]
@@ -45,8 +45,8 @@ def make_metadata(
         )
         # Record resolved sizes so metadata matches the uploaded dataset.
         meta[name] = {
-            "dim_parameters": int(task.dim_parameters),
-            "dim_data": int(task.dim_data),
+            "dim_theta": int(task.dim_theta),
+            "dim_x": int(task.dim_x),
             "data_kind": exporter.data_kind,
             "data_shape": list(exporter.data_shape),
             "splits": {

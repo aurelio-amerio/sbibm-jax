@@ -35,8 +35,8 @@ class Simulator:
         self.num_simulations = 0
 
         self.name = task.name
-        self.dim_data = task.dim_data
-        self.dim_parameters = task.dim_parameters
+        self.dim_x = task.dim_x
+        self.dim_theta = task.dim_theta
         self.flatten_data = task.flatten_data
         self.unflatten_data = task.unflatten_data
 
@@ -47,11 +47,11 @@ class Simulator:
 
         Args:
             key: JAX PRNG key.
-            parameters: Parameter array of shape (batch, dim_parameters)
-                or (dim_parameters,).
+            parameters: Parameter array of shape (batch, dim_theta)
+                or (dim_theta,).
 
         Returns:
-            Simulated data of shape (batch, dim_data).
+            Simulated data of shape (batch, dim_x).
 
         Raises:
             SimulationBudgetExceeded: If budget is exceeded.
@@ -60,7 +60,7 @@ class Simulator:
             parameters = parameters.reshape(1, -1)
 
         assert parameters.ndim == 2
-        assert parameters.shape[1] == self.dim_parameters
+        assert parameters.shape[1] == self.dim_theta
 
         requested_simulations = parameters.shape[0]
 

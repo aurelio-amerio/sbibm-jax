@@ -35,9 +35,9 @@ def load_reference(task: Task, exporter: DatasetExporter) -> Optional[Dataset]:
         except FileNotFoundError:
             return None
 
-        # Reshape the observation `x` from (1, dim_data) into the exporter's
+        # Reshape the observation `x` from (1, dim_x) into the exporter's
         # native storage shape (drop the leading sample axis after reshape).
-        obs_flat = obs.reshape(1, task.dim_data)
+        obs_flat = obs.reshape(1, task.dim_x)
         obs_shaped = exporter.shape_x(obs_flat)[0]
 
         observations.append(obs_shaped)

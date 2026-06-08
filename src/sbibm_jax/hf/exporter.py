@@ -1,7 +1,7 @@
 """Dataset exporter base + data-kind subclasses.
 
 The exporter owns the HF Features schema and the shape transformation from the
-flat (batch, dim_data) block emitted by sbibm_jax.hf.generate to the
+flat (batch, dim_x) block emitted by sbibm_jax.hf.generate to the
 native-storage shape (vector / image / time-series). Concrete subclasses
 override three things: `data_kind`, `x_feature()`, and `shape_x(x_flat)`.
 """
@@ -46,7 +46,7 @@ class DatasetExporter(ABC):
         self.dtype = dtype
         self.chunk_size = chunk_size
         self.max_factor = max_factor
-        self.data_shape = data_shape if data_shape is not None else (task.dim_data,)
+        self.data_shape = data_shape if data_shape is not None else (task.dim_x,)
         self.resample_invalid = resample_invalid
 
     @abstractmethod
@@ -55,7 +55,7 @@ class DatasetExporter(ABC):
 
     @abstractmethod
     def shape_x(self, x_flat: np.ndarray) -> np.ndarray:
-        """Reshape a flat `(batch, dim_data)` block to native storage shape."""
+        """Reshape a flat `(batch, dim_x)` block to native storage shape."""
 
     def theta_feature(self):
         return List(Value("float32"))

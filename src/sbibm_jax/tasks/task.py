@@ -15,8 +15,8 @@ from sbibm_jax.utils.io import get_array_from_csv, save_array_to_csv
 class Task:
     def __init__(
         self,
-        dim_data: int,
-        dim_parameters: int,
+        dim_x: int,
+        dim_theta: int,
         name: str,
         num_observations: int,
         num_posterior_samples: int,
@@ -28,8 +28,8 @@ class Task:
         """Base class for benchmark tasks.
 
         Args:
-            dim_data: Dimensionality of data.
-            dim_parameters: Dimensionality of parameters.
+            dim_x: Dimensionality of data.
+            dim_theta: Dimensionality of parameters.
             name: Name of task (matches folder name).
             num_observations: Number of different observations.
             num_posterior_samples: Number of posterior samples to generate.
@@ -40,8 +40,8 @@ class Task:
             observation_seeds: Seeds used to generate observations. Defaults
                 to a sequence starting at 1000000.
         """
-        self.dim_data = dim_data
-        self.dim_parameters = dim_parameters
+        self.dim_x = dim_x
+        self.dim_theta = dim_theta
         self.name = name
         self.num_observations = num_observations
         self.num_posterior_samples = num_posterior_samples
@@ -68,7 +68,7 @@ class Task:
             num_samples: Number of samples to draw.
 
         Returns:
-            Array of shape (num_samples, dim_parameters).
+            Array of shape (num_samples, dim_theta).
         """
         raise NotImplementedError
 
@@ -93,11 +93,11 @@ class Task:
 
     def get_labels_data(self) -> List[str]:
         """Get list of data dimension labels."""
-        return [f"data_{i+1}" for i in range(self.dim_data)]
+        return [f"data_{i+1}" for i in range(self.dim_x)]
 
     def get_labels_parameters(self) -> List[str]:
         """Get list of parameter labels."""
-        return [f"parameter_{i+1}" for i in range(self.dim_parameters)]
+        return [f"parameter_{i+1}" for i in range(self.dim_theta)]
 
     def get_observation(self, num_observation: int) -> jnp.ndarray:
         """Load observed data for a given observation number.
@@ -106,7 +106,7 @@ class Task:
             num_observation: Observation number (1-indexed).
 
         Returns:
-            Array of shape (1, dim_data).
+            Array of shape (1, dim_x).
         """
         path = (
             self.path
@@ -125,7 +125,7 @@ class Task:
             num_observation: Observation number (1-indexed).
 
         Returns:
-            Array of shape (num_reference_posterior_samples, dim_parameters).
+            Array of shape (num_reference_posterior_samples, dim_theta).
         """
         path = (
             self.path
@@ -142,7 +142,7 @@ class Task:
             num_observation: Observation number (1-indexed).
 
         Returns:
-            Array of shape (1, dim_parameters).
+            Array of shape (1, dim_theta).
         """
         path = (
             self.path
@@ -154,11 +154,11 @@ class Task:
 
     def flatten_data(self, data: jnp.ndarray) -> jnp.ndarray:
         """Flatten data into 2D array."""
-        return data.reshape(-1, self.dim_data)
+        return data.reshape(-1, self.dim_x)
 
     def unflatten_data(self, data: jnp.ndarray) -> jnp.ndarray:
         """Unflatten data. Override for tasks with structured output."""
-        return data.reshape(-1, self.dim_data)
+        return data.reshape(-1, self.dim_x)
 
     def save_data(self, path, data: jnp.ndarray) -> None:
         """Save data array to CSV."""

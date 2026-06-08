@@ -39,8 +39,8 @@ class TestPrior:
 
     def test_metadata(self):
         task = ToyLensing(resolution=32)
-        assert task.dim_parameters == 2
-        assert task.dim_data == 32 ** 2
+        assert task.dim_theta == 2
+        assert task.dim_x == 32 ** 2
         assert task.name == "toy_lensing"
 
 
@@ -64,7 +64,7 @@ class TestSimulator:
 
     def test_custom_resolution(self):
         task = ToyLensing(resolution=16)
-        assert task.dim_data == 16 * 16
+        assert task.dim_x == 16 * 16
         k1, k2, k3 = jax.random.split(jax.random.PRNGKey(2), 3)
         theta = task.get_prior(k1, num_samples=3)
         sim = task.get_simulator(k2)
@@ -166,7 +166,7 @@ class TestObservations:
     def test_observation_shape(self):
         task = ToyLensing(resolution=16)
         obs = task.get_observation(1)
-        assert obs.shape == (1, task.dim_data)
+        assert obs.shape == (1, task.dim_x)
 
     def test_observation_deterministic(self):
         task = ToyLensing(resolution=16)
@@ -190,13 +190,13 @@ class TestRegistry:
 
         task = get_task("toy_lensing")
         assert isinstance(task, ToyLensing)
-        assert task.dim_data == 1024
+        assert task.dim_x == 1024
 
     def test_get_task_passes_kwargs(self):
         from sbibm_jax import get_task
 
         task = get_task("toy_lensing", resolution=16)
-        assert task.dim_data == 256
+        assert task.dim_x == 256
 
     def test_available_tasks_includes_toy_lensing(self):
         from sbibm_jax import get_available_tasks

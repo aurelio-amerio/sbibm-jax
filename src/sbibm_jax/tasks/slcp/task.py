@@ -24,11 +24,11 @@ class SLCP(Task):
         self.distractors = distractors
 
         if not self.distractors:
-            dim_data = 2 * self.num_data
+            dim_x = 2 * self.num_data
             name = "slcp"
             name_display = "SLCP"
         else:
-            dim_data = 100
+            dim_x = 100
             name = "slcp_distractors"
             name_display = "SLCP Distractors"
 
@@ -38,8 +38,8 @@ class SLCP(Task):
         ]
 
         super().__init__(
-            dim_parameters=5,
-            dim_data=dim_data,
+            dim_theta=5,
+            dim_x=dim_x,
             name=name,
             name_display=name_display,
             num_observations=10,
@@ -50,8 +50,8 @@ class SLCP(Task):
         )
 
         self.prior_params = {
-            "low": jnp.full((self.dim_parameters,), -3.0),
-            "high": jnp.full((self.dim_parameters,), 3.0),
+            "low": jnp.full((self.dim_theta,), -3.0),
+            "high": jnp.full((self.dim_theta,), 3.0),
         }
         self.prior_dist = dist.Independent(
             dist.Uniform(

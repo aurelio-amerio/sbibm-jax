@@ -23,15 +23,15 @@ class TestLoadReference:
         task = get_task("two_moons")
         exp = get_exporter(task, train_size=4, val_size=2, test_size=2)
         ref = load_reference(task, exp)
-        # observations: each row is (1, dim_data) -> flat list of dim_data floats.
+        # observations: each row is (1, dim_x) -> flat list of dim_x floats.
         row = ref[0]
-        assert len(row["observations"]) == task.dim_data
-        assert len(row["true_parameters"]) == task.dim_parameters
-        # reference_samples is a (num_ref_posterior_samples, dim_parameters) block
-        # -> list-of-lists. Each inner list has length dim_parameters.
+        assert len(row["observations"]) == task.dim_x
+        assert len(row["true_parameters"]) == task.dim_theta
+        # reference_samples is a (num_ref_posterior_samples, dim_theta) block
+        # -> list-of-lists. Each inner list has length dim_theta.
         rs = row["reference_samples"]
         assert len(rs) == task.num_reference_posterior_samples
-        assert len(rs[0]) == task.dim_parameters
+        assert len(rs[0]) == task.dim_theta
 
     def test_grf_absent_returns_none(self):
         task = get_task("gaussian_random_field", field_size=8)

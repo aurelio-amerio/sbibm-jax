@@ -69,8 +69,8 @@ class BeerMolBioSystems(Task):
         """
         self.n_jobs = n_jobs
         super().__init__(
-            dim_parameters=DIM_PARAMETERS,
-            dim_data=DIM_DATA,
+            dim_theta=DIM_PARAMETERS,
+            dim_x=DIM_DATA,
             name=Path(__file__).parent.name,
             name_display="Beer (MolBioSystems2014)",
             num_observations=10,
@@ -163,7 +163,7 @@ class BeerMolBioSystems(Task):
         petab_problem = L["petab_problem"]
         pp = L["pypesto_problem"]
         n_jobs = self.n_jobs
-        dim_data = self.dim_data
+        dim_x = self.dim_x
 
         def _simulate_one(full_scaled):
             out = helpers.simulator_amici(
@@ -181,8 +181,8 @@ class BeerMolBioSystems(Task):
             )
             rows = []
             for r in results:
-                if r.shape[0] != dim_data:
-                    rows.append(np.full(dim_data, np.nan))
+                if r.shape[0] != dim_x:
+                    rows.append(np.full(dim_x, np.nan))
                 else:
                     rows.append(r)
             return jnp.asarray(np.stack(rows, axis=0))
@@ -196,7 +196,7 @@ class BeerMolBioSystems(Task):
 
         Matches the layout produced by petab_helpers.amici_df_to_array:
         rows = sorted unique times, columns = sorted (condition, observable)
-        pairs, flattened row-major into dim_data.
+        pairs, flattened row-major into dim_x.
         """
         petab_problem = self._load()["petab_problem"]
         m = petab_problem.measurement_df

@@ -110,7 +110,7 @@ def main(argv=None) -> None:
     task = BeerMolBioSystems(n_jobs=args.n_jobs)
     task._load()
     log(f"LOAD done in {time.perf_counter() - t:.1f}s "
-        f"(dim_parameters={task.dim_parameters}, dim_data={task.dim_data})")
+        f"(dim_theta={task.dim_theta}, dim_x={task.dim_x})")
 
     key = jax.random.PRNGKey(args.seed)
     k_prior, k_sim = jax.random.split(key)
@@ -129,7 +129,7 @@ def main(argv=None) -> None:
         f"in batches of {args.batch}...")
     task.n_jobs = args.n_jobs
     sim = task.get_simulator(k_sim, max_calls=None)
-    xs = np.full((args.n, task.dim_data), np.nan, dtype=np.float32)
+    xs = np.full((args.n, task.dim_x), np.nan, dtype=np.float32)
     main_bad = 0
     done = 0
     run_t0 = time.perf_counter()

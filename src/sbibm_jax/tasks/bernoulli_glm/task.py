@@ -22,12 +22,12 @@ class BernoulliGLM(Task):
         """
         self.summary = summary
         if self.summary == "sufficient":
-            dim_data = 10
+            dim_x = 10
             name = "bernoulli_glm"
             name_display = "Bernoulli GLM"
             self.raw = False
         elif self.summary == "raw":
-            dim_data = 100
+            dim_x = 100
             self.raw = True
             name = "bernoulli_glm_raw"
             name_display = "Bernoulli GLM Raw"
@@ -35,8 +35,8 @@ class BernoulliGLM(Task):
             raise NotImplementedError(f"Unknown summary type: {summary}")
 
         super().__init__(
-            dim_parameters=10,
-            dim_data=dim_data,
+            dim_theta=10,
+            dim_x=dim_x,
             name=name,
             name_display=name_display,
             num_posterior_samples=10000,
@@ -51,7 +51,7 @@ class BernoulliGLM(Task):
         }
 
 
-        M = self.dim_parameters - 1
+        M = self.dim_theta - 1
         D = jnp.diag(jnp.ones(M)) - jnp.diag(jnp.ones(M - 1), -1)
         F = D @ D + jnp.diag(1.0 * jnp.arange(M) / M) ** 0.5
         Binv = jnp.zeros((M + 1, M + 1))
@@ -129,8 +129,8 @@ class BernoulliGLM(Task):
         n_timesteps = len(stimulus_I)
         stimulus_np = np.array(stimulus_I)
 
-        design = np.zeros((n_timesteps, self.dim_parameters - 1), dtype=np.float32)
-        for j in range(self.dim_parameters - 1):
+        design = np.zeros((n_timesteps, self.dim_theta - 1), dtype=np.float32)
+        for j in range(self.dim_theta - 1):
             design[j:, j] = stimulus_np[:n_timesteps - j]
 
 
@@ -200,7 +200,7 @@ class BernoulliGLM(Task):
         return get_array_from_csv(path)
 
     def flatten_data(self, data: jnp.ndarray) -> jnp.ndarray:
-        return data.reshape(-1, self.dim_data)
+        return data.reshape(-1, self.dim_x)
 
     def _sample_reference_posterior(
         self,

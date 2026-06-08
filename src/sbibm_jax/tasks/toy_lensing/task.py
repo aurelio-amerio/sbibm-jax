@@ -24,8 +24,8 @@ class ToyLensing(Task):
         """
         self.resolution = resolution
         super().__init__(
-            dim_parameters=2,
-            dim_data=resolution * resolution,
+            dim_theta=2,
+            dim_x=resolution * resolution,
             name=Path(__file__).parent.name,
             name_display="Toy Gravitational Lensing",
             num_observations=10,
@@ -130,7 +130,7 @@ class ToyLensing(Task):
             num_observation: Observation number (1-indexed).
 
         Returns:
-            Array of shape (1, dim_data).
+            Array of shape (1, dim_x).
         """
         k_theta, k_sim = self._observation_keys(num_observation)
         z_o = self.get_prior(k_theta, num_samples=1)
