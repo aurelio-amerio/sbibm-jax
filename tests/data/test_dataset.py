@@ -65,3 +65,35 @@ class TestConstruction:
         from sbibm_jax.data import TaskDataset
         ds = TaskDataset("two_moons", kind="joint")
         assert ds.dim_joint == 4
+
+
+class TestLoaders:
+    def test_train_loader_yields_tokenized_batches(self, patched):
+        from sbibm_jax.data import TaskDataset
+        ds = TaskDataset("two_moons", kind="conditional")
+        loader = ds.get_train_loader(batch_size=4)
+        theta, x = next(iter(loader))
+        assert np.asarray(theta).shape == (4, 2, 1)
+        assert np.asarray(x).shape == (4, 2, 1)
+
+    def test_num_samples_subsamples_prefix(self, patched):
+        from sbibm_jax.data import TaskDataset
+        ds = TaskDataset("two_moons")
+        loader = ds.get_train_loader(batch_size=2, num_samples=4)
+        theta, x = next(iter(loader))
+        assert np.asarray(theta).shape[0] == 2
+
+    def test_max_workers_clamped(self, patched):
+        from sbibm_jax.data import TaskDataset
+        ds = TaskDataset("two_moons", max_workers=64)
+        assert ds.max_workers == 8
+
+    def test_prefetching_loader_iterates(self, patched):
+        # The numpy collate must survive grain's mp_prefetch (worker
+        # subprocesses pickle batches across the process boundary). max_workers
+        # small to keep it light on the shared node.
+        from sbibm_jax.data import TaskDataset
+        ds = TaskDataset("two_moons", use_prefetching=True, max_workers=2)
+        loader = ds.get_train_loader(batch_size=2)
+        theta, x = next(iter(loader))
+        assert np.asarray(theta).shape == (2, 2, 1)

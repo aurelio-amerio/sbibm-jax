@@ -8,6 +8,7 @@ pass repo=config.DEFAULT_REPO for production.
 
 import json
 
+import grain
 import numpy as np
 from datasets import load_dataset
 from huggingface_hub import hf_hub_download
@@ -76,3 +77,35 @@ class TaskDataset:
         self.df_test = self.dataset["test"]
         self.max_samples = self.df_train.num_rows
         self._posterior = None  # lazily loaded in get_reference
+
+    def _loader(self, split, batch_size, num_samples=None):
+        if num_samples is not None:
+            if num_samples > split.num_rows:
+                raise ValueError(
+                    f"num_samples={num_samples} exceeds split size {split.num_rows}."
+                )
+            split = split.select(range(int(num_samples)))
+        pipe = (
+            grain.MapDataset.source(split)
+            .shuffle(self.seed)
+            .repeat()
+            .to_iter_dataset()
+            .batch(batch_size)
+            .map(self._collate)
+        )
+        if self.use_prefetching and self.max_workers:
+            cfg = grain.experimental.pick_performance_config(
+                ds=pipe, ram_budget_mb=1024, max_workers=self.max_workers,
+                max_buffer_size=None,
+            )
+            pipe = pipe.mp_prefetch(cfg.multiprocessing_options)
+        return pipe
+
+    def get_train_loader(self, batch_size, num_samples=None):
+        return self._loader(self.df_train, batch_size, num_samples)
+
+    def get_val_loader(self, batch_size):
+        return self._loader(self.df_val, batch_size)
+
+    def get_test_loader(self, batch_size):
+        return self._loader(self.df_test, batch_size)
