@@ -89,3 +89,14 @@ class TestBuildStats:
         )
         assert np.array(stats["theta_mean"]).shape == (1, task.dim_theta)
         assert np.array(stats["x_mean"]).shape == (1, task.dim_x)
+
+
+class TestImageStatsShape:
+    def test_grf_x_stats_are_global_scalar(self):
+        bundle = build_dataset(
+            "gaussian_random_field",
+            **SMALL_OPTS,
+            task_kwargs={"field_size": 8},
+        )
+        # x native shape is (H, W); global-scalar reduction -> (1, 1, 1).
+        assert np.array(bundle["stats"]["x_mean"]).shape == (1, 1, 1)

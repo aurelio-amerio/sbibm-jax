@@ -37,6 +37,9 @@ class ToyLensing(Task):
         # HF export hints: stored as (H, W) images via ImageExporter.
         self.hf_data_kind = "image"
         self.hf_data_shape = (resolution, resolution)
+        # Normalize the whole image with a single global scalar (avoid
+        # per-pixel stats). Axes refer to the native batch shape (B, H, W).
+        self.hf_stats_axes = {"theta": (0,), "x": (0, 1, 2)}
         # Cap HF generation at 100k train (expensive simulator / large image
         # rows); consumers subsample smaller budgets by indexing the prefix.
         self.hf_split_sizes = {
