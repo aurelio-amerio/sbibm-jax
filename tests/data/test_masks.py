@@ -23,3 +23,23 @@ class TestConditionSamplers:
         assert np.asarray(m).shape == (3, 6)
         assert bool(jnp.all(~m[:, :2]))   # theta not conditioned
         assert bool(jnp.all(m[:, 2:]))    # x conditioned
+
+
+class TestBaseMasks:
+    @pytest.mark.parametrize("name,dt,dx", [
+        ("two_moons", 2, 2), ("gaussian_linear", 10, 10),
+        ("gaussian_linear_uniform", 10, 10), ("gaussian_mixture", 2, 2),
+        ("slcp", 5, 8),
+    ])
+    def test_base_mask_shape(self, name, dt, dx):
+        from sbibm_jax.data.masks.base import get_base_mask_fn
+        fn = get_base_mask_fn(name, dim_theta=dt, dim_x=dx)
+        node_ids = jnp.arange(dt + dx)
+        mask = fn(node_ids, None)
+        assert np.asarray(mask).shape == (dt + dx, dt + dx)
+        assert np.asarray(mask).dtype == np.bool_
+
+    def test_unsupported_raises(self):
+        from sbibm_jax.data.masks.base import get_base_mask_fn
+        with pytest.raises(NotImplementedError):
+            get_base_mask_fn("bernoulli_glm", dim_theta=10, dim_x=10)
