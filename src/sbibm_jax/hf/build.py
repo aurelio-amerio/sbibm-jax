@@ -2,8 +2,11 @@
 
 from typing import Optional
 
+import math
+
 import numpy as np
 from datasets import Dataset
+from tqdm import tqdm
 
 from sbibm_jax import get_task
 from sbibm_jax.hf import config
@@ -41,8 +44,13 @@ def _compute_train_stats(task, exporter, train_dataset) -> dict:
     """
     theta_axes, x_axes = resolve_stats_axes(task)
     acc = StatsAccumulator(theta_axes, x_axes)
-    for batch in train_dataset.with_format("numpy").iter(
-        batch_size=exporter.chunk_size
+    n_batches = math.ceil(len(train_dataset) / 128)
+    iterator = train_dataset.with_format("numpy").iter(batch_size=128)
+    for batch in tqdm(
+        iterator,
+        total=n_batches,
+        desc=f"stats [{task.name}]",
+        unit="chunk",
     ):
         acc.update(np.asarray(batch["thetas"]), np.asarray(batch["xs"]))
     return acc.result()

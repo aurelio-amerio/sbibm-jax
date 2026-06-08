@@ -1,0 +1,27 @@
+experiment_name = beer
+version = 1a    
+workdir = /lhome/ific/a/aamerio/data/github/sbibm-jax
+script_path = scripts/make_dataset.py
+args = --tasks beer_molbiosystems --chunk-size 1000
+
+universe = vanilla
+
+request_memory = 64 GB
+request_cpus = 8
+
+executable = run_script.sh
+arguments = "$(workdir) $(script_path) $(args)"
+getenv = True
+# request_gpus = 1
+requirements = (Machine != "mlwn11.ific.uv.es")
+
+log                     = condor_logs/logs_$(experiment_name)_$(version).log
+output                  = condor_logs/outfile_$(experiment_name)_$(version).out
+error                   = condor_logs/errors_$(experiment_name)_$(version).err
+
+#########
+
+queue 
+
+
+
