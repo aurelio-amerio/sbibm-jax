@@ -70,6 +70,24 @@ the shipped `stats/stats_<task>.npz` files. Key facts established by inspection:
   `gaussian_mixture`, `slcp`; `bernoulli_glm` raises `NotImplementedError`;
   GW/lensing have none (conditional-only).
 
+### Task mapping: GenSBI → sbibm-jax (important)
+
+The two repos' task rosters differ, so the loader targets the **sbibm-jax** set:
+
+- GenSBI `lensing` / `GravitationalLensing` **is** sbibm-jax **`toy_lensing`**
+  (renamed; `hf_data_kind="image"`, `(resolution, resolution)`). All
+  `lensing`-style examples below refer to `toy_lensing`.
+- GenSBI `gravitational_waves` is **not yet implemented in sbibm-jax** (deferred
+  to the future). It is used here only as an *illustrative* example of a future
+  per-channel time-series reduction; it is **not** a task this work implements.
+- The 5 mask-bearing analytical tasks all exist in sbibm-jax
+  (`two_moons`, `gaussian_linear`, `gaussian_linear_uniform`,
+  `gaussian_mixture`, `slcp`), so the mask port (§5) has full coverage.
+- sbibm-jax additionally has `lotka_volterra`, `sir`, `gaussian_random_field`,
+  `beer_molbiosystems` (+ variants), which the generic loader serves as vector
+  (or, for `gaussian_random_field`/`toy_lensing`, image) tasks with no special
+  casing.
+
 ## What the producer already provides (we build on this)
 
 - `metadata.json` per task (keys post-§0 rename): `dim_theta`, `dim_x`, `data_kind`
@@ -179,7 +197,7 @@ TaskDataset(
     kind: str = "conditional",      # "joint" | "conditional"
     repo: str | None = None,        # None -> config.TEST_REPO
     normalize: bool = False,        # apply published stats in the collate
-    dtype = jnp.float32,            # e.g. jnp.bfloat16 for GW/lensing
+    dtype = jnp.float32,            # e.g. jnp.bfloat16 for image tasks
     seed: int = 42,
     use_prefetching: bool = True,
     max_workers: int | None = None, # capped at <= 8 (shared node)
@@ -206,7 +224,8 @@ Methods:
   `get_true_parameters(num_observation=1)`. Both load the `f"{name}_posterior"`
   config / `reference_posterior` split and index `num_observation - 1` into
   `observations` / `reference_samples` / `true_parameters`. Tasks without a
-  `_posterior` config raise an informative error (as GW/lensing do today).
+  `_posterior` config raise an informative error (as `toy_lensing` and the
+  ODE/PEtab tasks do today — they ship no reference posteriors).
 
 ## §3 — One generic processing path (no per-task overrides)
 
@@ -221,17 +240,19 @@ The collate (`process.py`) is **fully generic**, driven by `metadata.json`:
    `process_joint`/`process_conditional` exactly.
 
 This generic path reproduces **both** the analytical `process_*` **and** the
-GW/lensing bespoke `split_data` — verified: `split_data` is only
-*reshape-to-native + bfloat16 + normalize*, all of which the generic path covers
-once `dtype` is a loader parameter and stats live in metadata. Therefore **no
-task needs a custom `process_fn`.** If a future task genuinely needs bespoke
-shaping, an opt-in hook can be added then (YAGNI for now).
+image (`toy_lensing`) bespoke `split_data` — verified: GenSBI's `split_data` is
+only *reshape-to-native + bfloat16 + normalize*, all of which the generic path
+covers once `dtype` is a loader parameter and stats live in metadata. Therefore
+**no current sbibm-jax task needs a custom `process_fn`.** (GenSBI's
+`gravitational_waves` — a per-channel time-series — is not yet implemented here;
+when it lands, re-confirm it fits this path or add an opt-in hook then. YAGNI for
+now.)
 
 **Joint mode is vector-only.** Concatenating θ-tokens with x-tokens along one
 axis is only meaningful for flat-vector data; for `data_kind in {image,
 timeseries}` `kind="joint"` raises an informative error. This matches GenSBI,
-where the image/GW tasks are conditional-only. Conditional mode works for all
-data kinds.
+where the image task is conditional-only. Conditional mode works for all data
+kinds.
 
 Output shapes (tokenized, per decision 5):
 
@@ -253,10 +274,10 @@ Producer-side change in `sbibm_jax.hf`:
   ```python
   # default (per-feature: reduce the batch axis only)
   hf_stats_axes = {"theta": (0,), "x": (0,)}
-  # GravitationalLensing — global scalar over the whole image:
+  # toy_lensing — global scalar over the whole image:
   hf_stats_axes = {"theta": (0,), "x": (0, 1, 2)}
-  # GravitationalWaves — per-channel (keep the channel axis):
-  hf_stats_axes = {"theta": (0,), "x": (0, 1)}
+  # (illustrative, future GW time-series) per-channel, keep the channel axis:
+  # hf_stats_axes = {"theta": (0,), "x": (0, 1)}
   ```
 
   Axes refer to the **native batch shape** `(batch, *data_shape)`. `keepdims`
