@@ -4,7 +4,9 @@ import numpy as np
 import pytest
 from datasets import Dataset
 
+from sbibm_jax import get_task
 from sbibm_jax.hf import build_dataset
+from sbibm_jax.hf.generate import derive_task_keys, generate_samples
 
 
 SMALL_OPTS = dict(train_size=8, val_size=4, test_size=2, chunk_size=4)
@@ -13,7 +15,7 @@ SMALL_OPTS = dict(train_size=8, val_size=4, test_size=2, chunk_size=4)
 class TestBuildVector:
     def test_returns_bundle(self):
         bundle = build_dataset("gaussian_linear", **SMALL_OPTS)
-        assert set(bundle) == {"train", "validation", "test", "reference"}
+        assert set(bundle) == {"train", "validation", "test", "reference", "stats"}
         for k in ("train", "validation", "test"):
             assert isinstance(bundle[k], Dataset)
 
@@ -63,3 +65,27 @@ class TestBuildImage:
             task_kwargs={"field_size": 8},
         )
         assert bundle["reference"] is None
+
+
+class TestBuildStats:
+    def test_stats_match_materialized_train_split(self):
+        # build_dataset must compute train-split stats equal to a direct pass.
+        bundle = build_dataset(
+            "two_moons", train_size=512, val_size=16, test_size=16,
+        )
+        stats = bundle["stats"]
+        assert stats is not None
+        # Reproduce the same train draw and compare (same master seed + key).
+        task = get_task("two_moons")
+        key = derive_task_keys(task.name)["train"]
+        thetas, xs, _ = generate_samples(task, key, 512)
+        np.testing.assert_allclose(
+            np.array(stats["theta_mean"]), thetas.mean(0, keepdims=True),
+            rtol=1e-4, atol=1e-4,
+        )
+        np.testing.assert_allclose(
+            np.array(stats["x_mean"]), xs.mean(0, keepdims=True),
+            rtol=1e-4, atol=1e-4,
+        )
+        assert np.array(stats["theta_mean"]).shape == (1, task.dim_theta)
+        assert np.array(stats["x_mean"]).shape == (1, task.dim_x)

@@ -2,6 +2,7 @@
 
 from typing import Optional
 
+import numpy as np
 from datasets import Dataset
 
 from sbibm_jax import get_task
@@ -9,6 +10,7 @@ from sbibm_jax.hf import config
 from sbibm_jax.hf.generate import derive_task_keys, iter_chunks
 from sbibm_jax.hf.reference import load_reference
 from sbibm_jax.hf.registry import get_exporter
+from sbibm_jax.hf.stats import StatsAccumulator, resolve_stats_axes
 
 
 def _build_split(exporter, key, n: int) -> Dataset:
@@ -31,6 +33,21 @@ def _build_split(exporter, key, n: int) -> Dataset:
     return Dataset.from_generator(row_generator, features=exporter.features())
 
 
+def _compute_train_stats(task, exporter, train_dataset) -> dict:
+    """Accumulate normalization stats by iterating the built train split.
+
+    Cache-independent (unlike accumulating inside Dataset.from_generator's
+    generator, which is skipped on a cache hit). x is stored native-shaped.
+    """
+    theta_axes, x_axes = resolve_stats_axes(task)
+    acc = StatsAccumulator(theta_axes, x_axes)
+    for batch in train_dataset.with_format("numpy").iter(
+        batch_size=exporter.chunk_size
+    ):
+        acc.update(np.asarray(batch["thetas"]), np.asarray(batch["xs"]))
+    return acc.result()
+
+
 def build_dataset(
     task_name: str,
     *,
@@ -45,8 +62,10 @@ def build_dataset(
 ) -> dict:
     """Build the train / validation / test (+ optional reference) bundle.
 
-    Returns a dict with keys "train", "validation", "test", "reference"
-    (the last may be None if the task ships no reference CSVs).
+    Returns a dict with keys "train", "validation", "test", "reference", and
+    "stats". "reference" may be None if the task ships no reference CSVs.
+    "stats" contains per-feature normalization statistics (mean/std) derived by
+    iterating the materialized train split (cache-independent).
     """
     task = get_task(task_name, **(task_kwargs or {}))
     exporter = get_exporter(
@@ -59,9 +78,11 @@ def build_dataset(
         dtype=dtype,
     )
     keys = derive_task_keys(task.name, master_seed=master_seed)
+    train = _build_split(exporter, keys["train"], exporter.train_size)
     return {
-        "train": _build_split(exporter, keys["train"], exporter.train_size),
+        "train": train,
         "validation": _build_split(exporter, keys["validation"], exporter.val_size),
         "test": _build_split(exporter, keys["test"], exporter.test_size),
         "reference": load_reference(task, exporter),
+        "stats": _compute_train_stats(task, exporter, train),
     }
