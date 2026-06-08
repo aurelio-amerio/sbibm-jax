@@ -97,3 +97,54 @@ class TestLoaders:
         loader = ds.get_train_loader(batch_size=2)
         theta, x = next(iter(loader))
         assert np.asarray(theta).shape == (2, 2, 1)
+
+
+def _fake_posterior():
+    d = Dataset.from_dict({
+        "observations": np.arange(2 * 2, dtype=np.float32).reshape(2, 2),
+        "reference_samples": np.zeros((2, 10, 2), np.float32),
+        "true_parameters": np.ones((2, 2), np.float32),
+    })
+    return DatasetDict({"reference_posterior": d})
+
+
+class TestReference:
+    def test_get_reference_indexes_observation(self, monkeypatch, patched):
+        from sbibm_jax.data import TaskDataset
+
+        def fake_load(repo, name=None, **kw):
+            if name and name.endswith("_posterior"):
+                return _fake_posterior()
+            return _fake_main_dataset()
+
+        monkeypatch.setattr("sbibm_jax.data.dataset.load_dataset", fake_load)
+        ds = TaskDataset("two_moons")
+        obs, samples = ds.get_reference(num_observation=2)
+        assert np.asarray(obs).shape == (2,)
+        assert np.asarray(samples).shape == (10, 2)
+        assert np.asarray(ds.get_true_parameters(2)).shape == (2,)
+
+    def test_get_reference_without_posterior_raises(self, monkeypatch, tmp_path):
+        # has_reference False -> informative error
+        import json
+        meta = {"t": {"dim_theta": 2, "dim_x": 2, "data_kind": "vector",
+                      "data_shape": [2], "splits": {"train": 8, "validation": 4, "test": 4},
+                      "has_reference": False, "num_observations": 1, "stats": None}}
+        p = tmp_path / "metadata.json"
+        p.write_text(json.dumps(meta))
+        monkeypatch.setattr("sbibm_jax.data.dataset.hf_hub_download", lambda **kw: str(p))
+        monkeypatch.setattr("sbibm_jax.data.dataset.load_dataset",
+                            lambda repo, name=None, **kw: _fake_main_dataset())
+        from sbibm_jax.data import TaskDataset
+        ds = TaskDataset("t")
+        with pytest.raises(ValueError, match="no reference"):
+            ds.get_reference(1)
+
+
+class TestNormalizeMethods:
+    def test_normalize_x_roundtrip(self, patched):
+        from sbibm_jax.data import TaskDataset
+        ds = TaskDataset("two_moons", normalize=True)
+        x = np.ones((3, 2, 1), np.float32)
+        back = ds.unnormalize_x(ds.normalize_x(x))
+        np.testing.assert_allclose(np.asarray(back), x, atol=1e-5)
