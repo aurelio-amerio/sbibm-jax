@@ -9,6 +9,7 @@ so the task constructs (for registry discovery) without them. Install with:
 Installing the extra triggers a one-time AMICI compile of the Beer model.
 """
 
+import logging
 from pathlib import Path
 from typing import List, Optional
 
@@ -37,6 +38,25 @@ _EXTRA_MSG = (
 def _seed_from_key(key: jax.random.PRNGKey) -> int:
     """Derive a 32-bit numpy seed from a JAX key (for reproducible numpy RNG)."""
     return int(jax.random.randint(key, (), 0, 2**31 - 1))
+
+
+def _silence_amici_logging(level: int = logging.WARNING) -> None:
+    """Raise every ``amici.*`` logger to at least ``level``.
+
+    AMICI pins an intermediate logger under ``amici.sim.*`` to DEBUG and
+    dumps a PEtab parameter-mapping summary on *every* simulation; with a
+    permissive root handler that floods bulk generation with millions of
+    lines. Raising only the top-level ``amici`` logger doesn't help (the
+    leaf loggers inherit the intermediate's DEBUG level), so walk every
+    amici.* logger that currently exists. Never *lowers* a logger — pypesto
+    pins ``amici`` itself to CRITICAL, and WARNING+ (incl. real AMICI
+    failures) must keep surfacing.
+    """
+    for name in list(logging.Logger.manager.loggerDict):
+        if name == "amici" or name.startswith("amici."):
+            logger = logging.getLogger(name)
+            if logger.getEffectiveLevel() < level:
+                logger.setLevel(level)
 
 
 class BeerMolBioSystems(Task):
@@ -80,6 +100,10 @@ class BeerMolBioSystems(Task):
             pypesto_problem, petab_problem, factory, amici_predictor = (
                 petab_helpers.load_problem(_PROBLEM_NAME, create_amici_model=True)
             )
+            # AMICI's loggers exist only after the model is loaded; silence
+            # them now so the per-simulation PEtab-mapping DEBUG dump doesn't
+            # flood bulk dataset generation with millions of lines.
+            _silence_amici_logging()
             self._loaded = {
                 "helpers": petab_helpers,
                 "pypesto_problem": pypesto_problem,

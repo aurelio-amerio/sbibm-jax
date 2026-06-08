@@ -20,9 +20,12 @@ localised to the exact line):
     live per-batch progress + ETA, then write theta/x to .npz (deliverable is
     secured here, before the parallel-path probe below),
   - BENCH: one *single* sim() call of --bench-n rows for each n_jobs in
-    --bench-jobs (default 1,4,-1) — this is the honest throughput number (the
-    big AMICI objects are pickled to workers once per call, like a real chunk)
-    and it directly exercises the suspected hang path (n_jobs=-1),
+    --bench-jobs (default 1,8) — this is the honest throughput number (the
+    big AMICI objects are pickled to workers once per call, like a real chunk).
+    Never pass -1 here: this node is a shared 64-core box and n_jobs=-1 grabs
+    all 64. Cap at 8. Keep --bench-n well above n_jobs (ideally near the real
+    chunk size) or the per-call worker-pickling overhead dominates and the
+    parallel number comes out *slower* than n_jobs=1,
   - PROJECTION: estimate train_size cost per n_jobs, inflated by the measured
     bad-row rate.
 
@@ -32,15 +35,21 @@ AMICI objects once per batch); trust the BENCH single-call numbers for cost.
 Run:
     uv run --extra pypesto python scripts/smoke_beer_simulator.py
     uv run --extra pypesto python scripts/smoke_beer_simulator.py \
-        --n 1000 --batch 250 --n-jobs 1 --bench-jobs 1 4 -1 --out beer_smoke.npz
+        --n 1000 --batch 1000 --n-jobs 8 --bench-jobs 1 8 --out beer_smoke.npz
 """
 
 import argparse
+import logging
 import os
 import time
 
 # AMICI is CPU; keep JAX (keys/prior only) off the GPU and avoid GPU init cost.
 os.environ.setdefault("JAX_PLATFORMS", "cpu")
+
+# AMICI emits per-simulation DEBUG logs (PEtab parameter mappings etc.) that
+# bloat output to ~70 KB per 8 sims — millions of lines at train_size. Silence
+# everything below WARNING before the model is loaded/run.
+logging.getLogger("amici").setLevel(logging.WARNING)
 
 import jax  # noqa: E402
 import numpy as np  # noqa: E402
@@ -77,8 +86,9 @@ def main(argv=None) -> None:
     p.add_argument("--n-jobs", type=int, default=1,
                    help="joblib n_jobs for the saved main run (default 1, the "
                         "core path that can't hang on worker pickling)")
-    p.add_argument("--bench-jobs", type=int, nargs="+", default=[1, 4, -1],
-                   help="n_jobs values to micro-benchmark (default 1 4 -1)")
+    p.add_argument("--bench-jobs", type=int, nargs="+", default=[1, 8],
+                   help="n_jobs values to micro-benchmark (default 1 8; never "
+                        "pass -1 on this shared 64-core node — cap at 8)")
     p.add_argument("--bench-n", type=int, default=64,
                    help="rows per single-call throughput benchmark")
     p.add_argument("--seed", type=int, default=0)

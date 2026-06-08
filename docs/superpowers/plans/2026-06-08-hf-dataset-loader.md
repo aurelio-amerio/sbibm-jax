@@ -654,7 +654,7 @@ The consumer subpackage. Its own PR. Default repo is `config.TEST_REPO`. Output 
 - Modify: `pyproject.toml:17-31` (optional-deps), `:33-63` (dependency-groups)
 - Create: `src/sbibm_jax/data/__init__.py`, `tests/data/__init__.py`, `tests/data/conftest.py`, `tests/data/test_import_guard.py`
 
-- [ ] **Step 1: Add the `[loader]` extra and dependency-group**
+- [x] **Step 1: Add the `[loader]` extra and dependency-group**
 
 In `pyproject.toml`, under `[project.optional-dependencies]` add:
 
