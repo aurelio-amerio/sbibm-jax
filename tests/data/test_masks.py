@@ -43,3 +43,22 @@ class TestBaseMasks:
         from sbibm_jax.data.masks.base import get_base_mask_fn
         with pytest.raises(NotImplementedError):
             get_base_mask_fn("bernoulli_glm", dim_theta=10, dim_x=10)
+
+
+class TestEdgeMasks:
+    @pytest.mark.parametrize("variant", ["undirected", "directed", "none"])
+    def test_edge_variants(self, variant):
+        from sbibm_jax.data.masks import get_edge_mask_fn
+        fn = get_edge_mask_fn("two_moons", variant, dim_theta=2, dim_x=2)
+        node_ids = jnp.arange(4)
+        cond = jnp.zeros(4, dtype=jnp.bool_)
+        out = fn(node_ids, cond)
+        if variant == "none":
+            assert out is None
+        else:
+            assert np.asarray(out).shape == (4, 4)
+
+    def test_unknown_variant_raises(self):
+        from sbibm_jax.data.masks import get_edge_mask_fn
+        with pytest.raises(NotImplementedError):
+            get_edge_mask_fn("two_moons", "bogus", dim_theta=2, dim_x=2)
