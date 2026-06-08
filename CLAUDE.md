@@ -133,6 +133,29 @@ split during generation (float64, streamed) and written into each task's
 overridden via the task's `hf_stats_axes` (image tasks use a global scalar).
 Stats are absent (`null`) under `--dry-run`.
 
+**Consumer loader (`src/sbibm_jax/data/`).** Optional subpackage gated by the
+`[loader]` extra (`grain`, `datasets`, `huggingface_hub`), with the same
+import-guard pattern as `hf` (informative ImportError → `pip install
+sbibm-jax[loader]`). `from sbibm_jax.data import TaskDataset` loads an
+SBI-benchmarks task straight from the Hub. It is driven *entirely* by the
+published `metadata.json` (dims, `data_kind`/`data_shape`, splits, stats) — no
+per-task code. The default repo is the **TEST** repo (`config.TEST_REPO`); pass
+`repo=config.DEFAULT_REPO` for production. `kind="conditional"` serves
+`(theta, x)`; `kind="joint"` concatenates them along the feature axis
+(vector-only). Both reproduce GenSBI's tokenization (each scalar feature → a
+length-1 token via a trailing `[..., None]`); `normalize=True` applies the
+gen-time stats from `metadata.json`. `get_train_loader` / `get_val_loader` /
+`get_test_loader` return `grain` pipelines (shuffle→repeat→batch→tokenizing
+collate, optional multiprocess `mp_prefetch`); `max_workers` is clamped to ≤8
+(shared-node rule). `get_train_loader(num_samples=N)` subsamples a prefix.
+`normalize_theta`/`normalize_x` (+ `unnormalize_*`) expose the stats directly;
+`get_reference`/`get_true_parameters` read the separate `{task}_posterior`
+config (raising when the task ships no reference). Graph/causal masks are
+**opt-in** via `sbibm_jax.data.masks` (`get_base_mask_fn`, `get_edge_mask_fn`,
+`get_condition_mask_fn`) — the core loader never imports it, and base/edge masks
+cover only the 5 analytical base tasks (`two_moons`, `gaussian_linear`,
+`gaussian_linear_uniform`, `gaussian_mixture`, `slcp`).
+
 ### Conventions
 
 - All array ops use `jax.numpy`; randomness is explicit PRNG keys split with
