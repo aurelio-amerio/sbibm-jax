@@ -127,6 +127,11 @@ simulators legitimately diverge set `hf_resample_invalid=True` to switch to
 rejection sampling (drop bad rows, redraw to exactly `n`, capped at
 `max_factor * n`). Defaults (split sizes, chunk size, target repo, master seed)
 live in `hf/config.py`; `scripts/make_dataset.py` is the only CLI entry point.
+Normalization stats (mean/std of `theta` and `x`) are accumulated over the train
+split during generation (float64, streamed) and written into each task's
+`metadata.json` block; the per-task reduction axes default to per-feature and are
+overridden via the task's `hf_stats_axes` (image tasks use a global scalar).
+Stats are absent (`null`) under `--dry-run`.
 
 ### Conventions
 
