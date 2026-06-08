@@ -9,6 +9,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 simulator, reference observations, and reference posterior samples — for
 evaluating SBI methods. The original sbibm was PyTorch/Pyro based; this port
 replaces those with JAX, `numpyro.distributions`, and `diffrax` (for ODE tasks).
+Any task can also be streamed out as a HuggingFace dataset via the optional
+`sbibm_jax.hf` subpackage.
 
 ## Commands
 
@@ -40,6 +42,27 @@ without the extra (for registry discovery) but raises an informative error when
 the prior/simulator/reference-posterior methods are called without it. Its
 helper code is a verbatim port of `diffusion-experiments/case_study2`.
 
+The `sbibm_jax.hf` HuggingFace export pipeline needs the optional `[hf]` extra
+(`datasets`, `huggingface_hub`): `uv sync --extra hf` (it is also in the `hf`
+dependency group, so `uv sync --all-groups` pulls it in). Build/upload datasets
+through the thin driver `scripts/make_dataset.py`:
+
+```bash
+# Write metadata.json only, no HF push (custom split sizes):
+uv run python scripts/make_dataset.py --tasks two_moons --train-size 1000 --dry-run
+uv run python scripts/make_dataset.py --all            # every task -> TEST repo
+uv run python scripts/make_dataset.py --all --prod     # every task -> PRODUCTION repo
+```
+
+Uploads target the **test** repo (`config.TEST_REPO`) by default; pass `--prod`
+to target production (`config.DEFAULT_REPO`). Each run prints a `Target repo: …
+(TEST|PRODUCTION)` banner. Subset uploads are non-destructive: the remote
+`metadata.json` is fetched and merged so untouched tasks are preserved, and the
+local `metadata.json` is deleted after a successful real upload.
+
+Pass `--chunk-size N` to shrink the per-chunk generation batch if a GPU OOMs
+on large image tasks (e.g. `gaussian_random_field_256`).
+
 ## Architecture
 
 **Task abstraction.** `src/sbibm_jax/tasks/task.py` defines the abstract `Task`
@@ -64,7 +87,8 @@ simulator as a closure inside `get_simulator` and return
 **Registry.** `src/sbibm_jax/tasks/__init__.py` maps task-name strings to classes
 in `get_task()`, with lazy per-branch imports. Some names are aliases/variants of
 the same class passing different kwargs (e.g. `slcp_distractors` → `SLCP(distractors=True)`,
-`bernoulli_glm_raw` → `BernoulliGLM(summary="raw")`, `gaussian_nonlinear` → `SLCP`).
+`bernoulli_glm_raw` → `BernoulliGLM(summary="raw")`, `gaussian_nonlinear` → `SLCP`,
+`gaussian_random_field_256` → `GaussianRandomField(field_size=256)`).
 `get_available_tasks()` discovers task directories on disk and appends these
 extra variant names. The top-level `sbibm_jax` package re-exports `get_task` and
 `get_available_tasks`.
@@ -82,6 +106,56 @@ function + `diffeqsolve` with `Tsit5`/`PIDController`, `jax.vmap`ed over the
 parameter batch. They may produce NaNs for divergent parameters; simulators
 propagate NaN rows rather than failing.
 
+**HuggingFace export (`src/sbibm_jax/hf/`).** Optional subpackage, gated by the
+`[hf]` extra with an import-guard that mirrors the `pypesto` pattern (informative
+ImportError pointing at `pip install sbibm-jax[hf]`). The key architectural fact
+is the **task ↔ exporter contract**: a task drives the export purely through a
+few optional `hf_*` attributes read via `getattr`-with-defaults in
+`registry.get_exporter`, so *any* task exports as a flat parameter-vector dataset
+with zero task-side changes; declaring `hf_data_kind` switches it to an image or
+time-series storage shape. One full build is:
+`build_dataset(task_name)` → `get_exporter` (dispatches `hf_data_kind` →
+`VectorExporter` / `ImageExporter` / `TimeSeriesExporter`, which own the HF
+`Features` schema and the flat-to-native reshape) → `derive_task_keys` (stable
+per-task PRNG keys via a `zlib.crc32` fold-in, *not* Python's salted `hash()`) →
+chunked streaming generation fed into `Dataset.from_generator` for the
+train/validation/test splits, plus an optional reference block built from the
+task's reference-posterior CSVs (skipped, returning `None`, when those files are
+absent). The non-finite-row behavior of the ODE/PEtab simulators above drives the
+validity policy: the default raises loudly on any NaN/Inf, and tasks whose
+simulators legitimately diverge set `hf_resample_invalid=True` to switch to
+rejection sampling (drop bad rows, redraw to exactly `n`, capped at
+`max_factor * n`). Defaults (split sizes, chunk size, target repo, master seed)
+live in `hf/config.py`; `scripts/make_dataset.py` is the only CLI entry point.
+Normalization stats (mean/std of `theta` and `x`) are accumulated over the train
+split during generation (float64, streamed) and written into each task's
+`metadata.json` block; the per-task reduction axes default to per-feature and are
+overridden via the task's `hf_stats_axes` (image tasks use a global scalar).
+Stats are absent (`null`) under `--dry-run`.
+
+**Consumer loader (`src/sbibm_jax/data/`).** Optional subpackage gated by the
+`[loader]` extra (`grain`, `datasets`, `huggingface_hub`), with the same
+import-guard pattern as `hf` (informative ImportError → `pip install
+sbibm-jax[loader]`). `from sbibm_jax.data import TaskDataset` loads an
+SBI-benchmarks task straight from the Hub. It is driven *entirely* by the
+published `metadata.json` (dims, `data_kind`/`data_shape`, splits, stats) — no
+per-task code. The default repo is the **TEST** repo (`config.TEST_REPO`); pass
+`repo=config.DEFAULT_REPO` for production. `kind="conditional"` serves
+`(theta, x)`; `kind="joint"` concatenates them along the feature axis
+(vector-only). Both reproduce GenSBI's tokenization (each scalar feature → a
+length-1 token via a trailing `[..., None]`); `normalize=True` applies the
+gen-time stats from `metadata.json`. `get_train_loader` / `get_val_loader` /
+`get_test_loader` return `grain` pipelines (shuffle→repeat→batch→tokenizing
+collate, optional multiprocess `mp_prefetch`); `max_workers` is clamped to ≤8
+(shared-node rule). `get_train_loader(num_samples=N)` subsamples a prefix.
+`normalize_theta`/`normalize_x` (+ `unnormalize_*`) expose the stats directly;
+`get_reference`/`get_true_parameters` read the separate `{task}_posterior`
+config (raising when the task ships no reference). Graph/causal masks are
+**opt-in** via `sbibm_jax.data.masks` (`get_base_mask_fn`, `get_edge_mask_fn`,
+`get_condition_mask_fn`) — the core loader never imports it, and base/edge masks
+cover only the 5 analytical base tasks (`two_moons`, `gaussian_linear`,
+`gaussian_linear_uniform`, `gaussian_mixture`, `slcp`).
+
 ### Conventions
 
 - All array ops use `jax.numpy`; randomness is explicit PRNG keys split with
@@ -90,6 +164,22 @@ propagate NaN rows rather than failing.
   and `name_display` carries the human-readable label.
 - Tasks are grouped into "phases" (analytical, ODE, …) reflected in test files,
   not in the package layout.
+- HuggingFace export is opt-in-by-attribute: a task only sets `hf_*` attributes
+  (`hf_data_kind`, `hf_data_shape`, `hf_resample_invalid`, `hf_split_sizes`) when
+  it needs to deviate from the flat-vector default. The image tasks
+  `gaussian_random_field` and `toy_lensing` declare `hf_data_kind="image"` plus a
+  2-D `hf_data_shape`; ODE/PEtab tasks set `hf_resample_invalid=True`. The
+  expensive tasks `toy_lensing`, `gaussian_random_field`, and `beer_molbiosystems`
+  also set `hf_split_sizes` to cap `train` at `100_000` (vs. the global
+  `1_000_000` default); validation/test stay at `10_000`. The
+  `gaussian_random_field_256` alias is a 256×256 high-resolution variant of
+  `gaussian_random_field` (same `hf_split_sizes` cap of `100_000` train); each
+  256×256 float32 row is ~256 KiB, so its train split is ~25 GiB on disk —
+  generated incrementally via the chunked `Dataset.from_generator` streaming,
+  never held whole in RAM. There is no per-task
+  budget ladder — each dataset is generated once at its largest useful size and
+  consumers subsample smaller budgets by indexing the dataset prefix (valid
+  because every `(θ, x)` row is an independent draw).
 
 ## Note on `diffusion-experiments/`
 

@@ -15,6 +15,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+hf = [
+    "datasets>=2.20.0",
+    "huggingface_hub>=0.24.0",
+]
+loader = [
+    "datasets>=2.20.0",
+    "huggingface_hub>=0.24.0",
+    "grain>=0.2.15",
+]
 pypesto = [
     "pypesto[amici]>=0.6.0",
     "petab",
@@ -46,11 +55,22 @@ test = [
 notebooks = [
     "notebook>=7.5.4",
 ]
+hf = [
+    "datasets>=2.20.0",
+    "huggingface_hub>=0.24.0",
+]
+loader = [
+    "datasets>=2.20.0",
+    "huggingface_hub>=0.24.0",
+    "grain>=0.2.15",
+]
 dev = [
     {include-group = "lint"},
     {include-group = "test"},
     {include-group = "torch"},
     {include-group = "notebooks"},
+    {include-group = "hf"},
+    {include-group = "loader"},
 ]
 
 [build-system]

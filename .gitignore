@@ -209,3 +209,7 @@ uv.lock
 .vscode/settings.json
 
 references
+
+diffusion-experiments
+
+sub/condor_logs

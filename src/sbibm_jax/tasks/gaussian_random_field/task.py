@@ -13,7 +13,12 @@ from sbibm_jax.tasks.task import Task
 
 
 class GaussianRandomField(Task):
-    def __init__(self, field_size: int = 32):
+    def __init__(
+        self,
+        field_size: int = 32,
+        name: Optional[str] = None,
+        name_display: Optional[str] = None,
+    ):
         """Gaussian Random Field field-inference task.
 
         Parameters theta = (log_std, alpha) control a 2D Gaussian random
@@ -23,19 +28,31 @@ class GaussianRandomField(Task):
 
         Args:
             field_size: Side length N of the (N, N) field.
+            name: Optional task name override (defaults to the directory
+                name). Used by the high-resolution registry alias.
+            name_display: Optional human-readable label override.
         """
         self.field_size = field_size
         super().__init__(
-            dim_parameters=2,
-            dim_data=field_size * field_size,
-            name=Path(__file__).parent.name,
-            name_display="Gaussian Random Field",
+            dim_theta=2,
+            dim_x=field_size * field_size,
+            name=name or Path(__file__).parent.name,
+            name_display=name_display or "Gaussian Random Field",
             num_observations=10,
             num_posterior_samples=10000,
             num_reference_posterior_samples=10000,
-            num_simulations=[1000, 10000, 100000, 1000000],
             path=Path(__file__).parent.absolute(),
         )
+
+        # HF export hints: stored as (H, W) images via ImageExporter.
+        self.hf_data_kind = "image"
+        self.hf_data_shape = (field_size, field_size)
+        self.hf_stats_axes = {"theta": (0,), "x": (0, 1, 2)}
+        # Cap HF generation at 100k train (large image rows); consumers
+        # subsample smaller budgets by indexing the dataset prefix.
+        self.hf_split_sizes = {
+            "train": 100_000, "validation": 10_000, "test": 10_000,
+        }
 
         self.prior_dist = dist.Independent(
             dist.Normal(
@@ -109,7 +126,7 @@ class GaussianRandomField(Task):
         This is the exact reference: run the simulator at a fixed theta_o.
         theta_o comes from the observation seed (num_observation) or is passed
         directly as `observation` (the role-inverted conditioning parameters).
-        Returns shape (num_samples, dim_data) in field space.
+        Returns shape (num_samples, dim_x) in field space.
         """
         assert (num_observation is None) != (observation is None), (
             "Provide exactly one of num_observation or observation."
@@ -121,7 +138,7 @@ class GaussianRandomField(Task):
 
         simulator = self.get_simulator(key)
         thetas = jnp.broadcast_to(
-            theta_o.reshape(1, -1), (num_samples, self.dim_parameters)
+            theta_o.reshape(1, -1), (num_samples, self.dim_theta)
         )
         return simulator(key, thetas)
 

@@ -20,8 +20,8 @@ class TestMetadata:
         task = BeerMolBioSystems()
         assert task.name == "beer_molbiosystems"
         assert task.name_display == "Beer (MolBioSystems2014)"
-        assert task.dim_parameters > 0
-        assert task.dim_data > 0
+        assert task.dim_theta > 0
+        assert task.dim_x > 0
         assert task.num_observations == 10
         assert len(task.observation_seeds) == 10
 
@@ -37,7 +37,7 @@ class TestPrior:
         task = BeerMolBioSystems()
         key = jax.random.PRNGKey(0)
         samples = task.get_prior(key, num_samples=5)
-        assert samples.shape == (5, task.dim_parameters)
+        assert samples.shape == (5, task.dim_theta)
         assert jnp.isrealobj(samples)
 
 
@@ -49,7 +49,7 @@ class TestSimulator:
         theta = task.get_prior(k1, num_samples=3)
         sim = task.get_simulator(k2)
         data = sim(k3, theta)
-        assert data.shape == (3, task.dim_data)
+        assert data.shape == (3, task.dim_x)
         assert jnp.isrealobj(data)
 
     def test_budget_exceeded(self):
@@ -74,7 +74,7 @@ class TestReferencePosterior:
         true_params, flat_obs, sim_df = task._generate_observation(
             task.observation_seeds[0]
         )
-        assert flat_obs.shape == (task.dim_data,)
+        assert flat_obs.shape == (task.dim_x,)
         recon = task._flat_to_measurement_df(flat_obs)
         import numpy as np
         a = sim_df.sort_values(
@@ -99,7 +99,7 @@ class TestReferencePosterior:
             n_mcmc_samples=200,
             n_chains=2,
         )
-        assert samples.shape == (8, task.dim_parameters)
+        assert samples.shape == (8, task.dim_theta)
 
 
 class TestRegistry:

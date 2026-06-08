@@ -22,22 +22,21 @@ class TwoMoons(Task):
         ]
 
         super().__init__(
-            dim_parameters=2,
-            dim_data=2,
+            dim_theta=2,
+            dim_x=2,
             name=Path(__file__).parent.name,
             name_display="Two Moons",
             num_observations=10,
             num_posterior_samples=10000,
             num_reference_posterior_samples=10000,
-            num_simulations=[100, 1000, 10000, 100000, 1000000],
             observation_seeds=observation_seeds,
             path=Path(__file__).parent.absolute(),
         )
 
         prior_bound = 1.0
         self.prior_params = {
-            "low": -prior_bound * jnp.ones((self.dim_parameters,)),
-            "high": +prior_bound * jnp.ones((self.dim_parameters,)),
+            "low": -prior_bound * jnp.ones((self.dim_theta,)),
+            "high": +prior_bound * jnp.ones((self.dim_theta,)),
         }
         self.prior_dist = dist.Independent(
             dist.Uniform(

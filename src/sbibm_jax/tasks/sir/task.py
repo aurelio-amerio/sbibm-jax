@@ -50,9 +50,9 @@ class SIR(Task):
         self.dim_data_raw = int(3 * (days / saveat + 1))
 
         if summary is None:
-            dim_data = self.dim_data_raw
+            dim_x = self.dim_data_raw
         elif summary == "subsample":
-            dim_data = 10
+            dim_x = 10
         else:
             raise NotImplementedError(f"Unknown summary: {summary}")
         self.summary = summary
@@ -63,17 +63,18 @@ class SIR(Task):
         ]
 
         super().__init__(
-            dim_parameters=2,
-            dim_data=dim_data,
+            dim_theta=2,
+            dim_x=dim_x,
             name=Path(__file__).parent.name,
             name_display="SIR",
             num_observations=len(observation_seeds),
             num_posterior_samples=10000,
             num_reference_posterior_samples=10000,
-            num_simulations=[100, 1000, 10000, 100000, 1000000],
             path=Path(__file__).parent.absolute(),
             observation_seeds=observation_seeds,
         )
+        # ODE divergences emit NaN rows; rejection-resample at HF export time.
+        self.hf_resample_invalid = True
 
         self.prior_params = {
             "loc": jnp.array([math.log(0.4), math.log(0.125)]),
@@ -158,7 +159,7 @@ class SIR(Task):
         return Simulator(task=self, simulator=simulator, max_calls=max_calls)
 
     def unflatten_data(self, data: jnp.ndarray) -> jnp.ndarray:
-        return data.reshape(-1, self.dim_data)
+        return data.reshape(-1, self.dim_x)
 
     def _sample_reference_posterior(
         self,

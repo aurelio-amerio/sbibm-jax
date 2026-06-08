@@ -20,10 +20,10 @@ ANALYTICAL_TASKS = [
 
 @pytest.fixture(params=ANALYTICAL_TASKS, ids=[t[0] for t in ANALYTICAL_TASKS])
 def task_info(request):
-    """Yields (task_instance, dim_params, dim_data) for each analytical task."""
-    name, dim_params, dim_data = request.param
+    """Yields (task_instance, dim_params, dim_x) for each analytical task."""
+    name, dim_params, dim_x = request.param
     task = get_task(name)
-    return task, dim_params, dim_data
+    return task, dim_params, dim_x
 
 
 class TestPrior:
@@ -49,27 +49,27 @@ class TestPrior:
 
 class TestSimulator:
     def test_shape(self, task_info):
-        task, dim_params, dim_data = task_info
+        task, dim_params, dim_x = task_info
         k1, k2, k3 = jax.random.split(jax.random.PRNGKey(0), 3)
         samples = task.get_prior(k1, num_samples=20)
         sim = task.get_simulator(k2)
         data = sim(k3, samples)
-        assert data.shape == (20, dim_data)
+        assert data.shape == (20, dim_x)
 
     def test_single_sample(self, task_info):
-        task, _, dim_data = task_info
+        task, _, dim_x = task_info
         k1, k2, k3 = jax.random.split(jax.random.PRNGKey(1), 3)
         sample = task.get_prior(k1, num_samples=1)
         sim = task.get_simulator(k2)
         data = sim(k3, sample)
-        assert data.shape == (1, dim_data)
+        assert data.shape == (1, dim_x)
 
 
 class TestDataLoading:
     def test_observation_shape(self, task_info):
-        task, _, dim_data = task_info
+        task, _, dim_x = task_info
         obs = task.get_observation(1)
-        assert obs.shape == (1, dim_data)
+        assert obs.shape == (1, dim_x)
 
     def test_true_parameters_shape(self, task_info):
         task, dim_params, _ = task_info
@@ -83,10 +83,10 @@ class TestDataLoading:
         assert ref.shape[0] > 0
 
     def test_all_observations_loadable(self, task_info):
-        task, _, dim_data = task_info
+        task, _, dim_x = task_info
         for i in range(1, min(task.num_observations + 1, 4)):  # test first 3
             obs = task.get_observation(i)
-            assert obs.shape == (1, dim_data)
+            assert obs.shape == (1, dim_x)
 
     def test_observation_matches_raw_csv(self, task_info):
         """Cross-validate observation loading against raw pandas read."""
@@ -109,7 +109,7 @@ class TestTaskRegistry:
     def test_get_task_returns_correct_type(self):
         task = get_task("gaussian_linear")
         assert task.name == "gaussian_linear"
-        assert task.dim_parameters == 10
+        assert task.dim_theta == 10
 
     def test_unknown_task_raises(self):
         with pytest.raises(NotImplementedError):

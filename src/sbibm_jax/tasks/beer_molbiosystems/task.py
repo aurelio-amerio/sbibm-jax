@@ -9,6 +9,7 @@ so the task constructs (for registry discovery) without them. Install with:
 Installing the extra triggers a one-time AMICI compile of the Beer model.
 """
 
+import logging
 from pathlib import Path
 from typing import List, Optional
 
@@ -39,6 +40,25 @@ def _seed_from_key(key: jax.random.PRNGKey) -> int:
     return int(jax.random.randint(key, (), 0, 2**31 - 1))
 
 
+def _silence_amici_logging(level: int = logging.WARNING) -> None:
+    """Raise every ``amici.*`` logger to at least ``level``.
+
+    AMICI pins an intermediate logger under ``amici.sim.*`` to DEBUG and
+    dumps a PEtab parameter-mapping summary on *every* simulation; with a
+    permissive root handler that floods bulk generation with millions of
+    lines. Raising only the top-level ``amici`` logger doesn't help (the
+    leaf loggers inherit the intermediate's DEBUG level), so walk every
+    amici.* logger that currently exists. Never *lowers* a logger — pypesto
+    pins ``amici`` itself to CRITICAL, and WARNING+ (incl. real AMICI
+    failures) must keep surfacing.
+    """
+    for name in list(logging.Logger.manager.loggerDict):
+        if name == "amici" or name.startswith("amici."):
+            logger = logging.getLogger(name)
+            if logger.getEffectiveLevel() < level:
+                logger.setLevel(level)
+
+
 class BeerMolBioSystems(Task):
     def __init__(self, n_jobs: int = -1):
         """Beer (MolBioSystems2014) PEtab task.
@@ -49,16 +69,22 @@ class BeerMolBioSystems(Task):
         """
         self.n_jobs = n_jobs
         super().__init__(
-            dim_parameters=DIM_PARAMETERS,
-            dim_data=DIM_DATA,
+            dim_theta=DIM_PARAMETERS,
+            dim_x=DIM_DATA,
             name=Path(__file__).parent.name,
             name_display="Beer (MolBioSystems2014)",
             num_observations=10,
             num_posterior_samples=10000,
             num_reference_posterior_samples=10000,
-            num_simulations=[1000, 10000, 100000, 1000000],
             path=Path(__file__).parent.absolute(),
         )
+        # AMICI failures emit full NaN rows; rejection-resample at HF export time.
+        self.hf_resample_invalid = True
+        # Cap HF generation at 100k train (expensive simulator); consumers
+        # subsample smaller budgets by indexing the dataset prefix.
+        self.hf_split_sizes = {
+            "train": 100_000, "validation": 10_000, "test": 10_000,
+        }
         # Lazily built, cached pypesto/AMICI handles.
         self._loaded = None
 
@@ -74,6 +100,10 @@ class BeerMolBioSystems(Task):
             pypesto_problem, petab_problem, factory, amici_predictor = (
                 petab_helpers.load_problem(_PROBLEM_NAME, create_amici_model=True)
             )
+            # AMICI's loggers exist only after the model is loaded; silence
+            # them now so the per-simulation PEtab-mapping DEBUG dump doesn't
+            # flood bulk dataset generation with millions of lines.
+            _silence_amici_logging()
             self._loaded = {
                 "helpers": petab_helpers,
                 "pypesto_problem": pypesto_problem,
@@ -133,7 +163,7 @@ class BeerMolBioSystems(Task):
         petab_problem = L["petab_problem"]
         pp = L["pypesto_problem"]
         n_jobs = self.n_jobs
-        dim_data = self.dim_data
+        dim_x = self.dim_x
 
         def _simulate_one(full_scaled):
             out = helpers.simulator_amici(
@@ -151,8 +181,8 @@ class BeerMolBioSystems(Task):
             )
             rows = []
             for r in results:
-                if r.shape[0] != dim_data:
-                    rows.append(np.full(dim_data, np.nan))
+                if r.shape[0] != dim_x:
+                    rows.append(np.full(dim_x, np.nan))
                 else:
                     rows.append(r)
             return jnp.asarray(np.stack(rows, axis=0))
@@ -166,7 +196,7 @@ class BeerMolBioSystems(Task):
 
         Matches the layout produced by petab_helpers.amici_df_to_array:
         rows = sorted unique times, columns = sorted (condition, observable)
-        pairs, flattened row-major into dim_data.
+        pairs, flattened row-major into dim_x.
         """
         petab_problem = self._load()["petab_problem"]
         m = petab_problem.measurement_df
