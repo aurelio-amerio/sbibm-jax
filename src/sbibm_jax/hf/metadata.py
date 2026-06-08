@@ -16,6 +16,7 @@ def make_metadata(
     train_size: Optional[int] = None,
     val_size: Optional[int] = None,
     test_size: Optional[int] = None,
+    stats_by_task: Optional[dict] = None,
 ) -> dict:
     """Build a metadata dict (and optionally write metadata.json).
 
@@ -33,6 +34,7 @@ def make_metadata(
         splits:         dict[str, int]
         has_reference:  bool
         num_observations: int
+        stats:          dict | None
     """
     meta: dict = {}
     for name in task_names:
@@ -56,6 +58,7 @@ def make_metadata(
             },
             "has_reference": load_reference(task, exporter) is not None,
             "num_observations": int(task.num_observations),
+            "stats": (stats_by_task or {}).get(name),
         }
 
     if output_path is not None:

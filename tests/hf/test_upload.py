@@ -49,6 +49,7 @@ class TestUploadDataset:
         val = _FakeDataset("val")
         test = _FakeDataset("test")
         ref = _FakeDataset("ref")
+        expected_stats = {"theta_mean": [[0.0]], "x_mean": [[0.0]]}
 
         def fake_build(task_name, **opts):
             return {
@@ -56,10 +57,11 @@ class TestUploadDataset:
                 "validation": val,
                 "test": test,
                 "reference": ref,
+                "stats": expected_stats,
             }
 
         monkeypatch.setattr(upload_mod, "build_dataset", fake_build)
-        upload_dataset("user/repo", "two_moons")
+        result = upload_dataset("user/repo", "two_moons")
 
         assert train.push_calls == [
             ("user/repo", {
@@ -89,6 +91,7 @@ class TestUploadDataset:
                 "private": False,
             }),
         ]
+        assert result == expected_stats
 
     def test_skips_reference_when_absent(self, monkeypatch):
         train = _FakeDataset("train")
@@ -101,6 +104,7 @@ class TestUploadDataset:
                 "validation": val,
                 "test": test,
                 "reference": None,
+                "stats": {"theta_mean": [[0.0]], "x_mean": [[0.0]]},
             }
 
         monkeypatch.setattr(upload_mod, "build_dataset", fake_build)

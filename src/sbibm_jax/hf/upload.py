@@ -48,8 +48,8 @@ def fetch_remote_metadata(repo_name: str) -> dict:
         return json.load(f)
 
 
-def upload_dataset(repo_name: str, task_name: str, **build_opts) -> None:
-    """Build the dataset for `task_name` and push each split to `repo_name`.
+def upload_dataset(repo_name: str, task_name: str, **build_opts) -> dict:
+    """Build the dataset for `task_name`, push each split, and return its stats.
 
     The dataset is pushed under config_name=task_name with splits train /
     validation / test. If the task ships a reference block, it is pushed under
@@ -72,3 +72,4 @@ def upload_dataset(repo_name: str, task_name: str, **build_opts) -> None:
             split="reference_posterior",
             private=False,
         )
+    return bundle["stats"]

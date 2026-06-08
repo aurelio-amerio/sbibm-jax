@@ -89,3 +89,20 @@ class TestMergeMetadata:
         merge_metadata(remote, local)
         assert remote == {"a": 1}
         assert local == {"b": 2}
+
+
+class TestMetadataStats:
+    def test_stats_injected_when_provided(self):
+        stats_by_task = {
+            "two_moons": {
+                "theta_mean": [[0.0, 0.0]], "theta_std": [[1.0, 1.0]],
+                "x_mean": [[0.0, 0.0]], "x_std": [[1.0, 1.0]],
+                "theta_axes": [0], "x_axes": [0],
+            }
+        }
+        meta = make_metadata(["two_moons"], stats_by_task=stats_by_task)
+        assert meta["two_moons"]["stats"] == stats_by_task["two_moons"]
+
+    def test_stats_absent_when_not_provided(self):
+        meta = make_metadata(["two_moons"])
+        assert meta["two_moons"]["stats"] is None

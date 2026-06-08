@@ -115,9 +115,7 @@ def main(argv=None):
     build_opts["master_seed"] = args.master_seed
 
     metadata_path = Path(args.metadata_path)
-    # Pass the partial per-dimension overrides straight through: make_metadata
-    # resolves unspecified sizes from each task's hf_split_sizes exactly as the
-    # upload path does, so metadata and the generated dataset always agree.
+    # Dry-run: metadata only, no generation, so no stats.
     local_meta = make_metadata(
         task_names,
         output_path=metadata_path,
@@ -131,13 +129,24 @@ def main(argv=None):
         print("Dry run — skipping HF uploads.")
         return
 
+    # Build + upload each task's data, collecting train-split stats.
+    stats_by_task = {}
+    for name in task_names:
+        print(f"Uploading dataset for task: {name}")
+        stats_by_task[name] = upload_dataset(repo, name, **build_opts)
+
+    # Rebuild metadata WITH stats, merge non-destructively, upload once.
+    local_meta = make_metadata(
+        task_names,
+        train_size=args.train_size,
+        val_size=args.val_size,
+        test_size=args.test_size,
+        stats_by_task=stats_by_task,
+    )
     remote_meta = fetch_remote_metadata(repo)
     merged_meta = merge_metadata(remote_meta, local_meta)
     metadata_path.write_text(json.dumps(merged_meta, indent=4))
     upload_metadata(str(metadata_path), repo)
-    for name in task_names:
-        print(f"Uploading dataset for task: {name}")
-        upload_dataset(repo, name, **build_opts)
     metadata_path.unlink(missing_ok=True)
     print(f"Removed local {metadata_path} (clean state).")
 
