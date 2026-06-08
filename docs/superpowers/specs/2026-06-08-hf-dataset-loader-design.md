@@ -44,7 +44,7 @@ the shipped `stats/stats_<task>.npz` files. Key facts established by inspection:
   `normalize_obs`/`normalize_cond`.
 - **Processing baked into the dataloader** via `process_fn`:
   - `process_joint`: `concat(thetas[...,None], xs[...,None], axis=1)` →
-    `(batch, dim_θ+dim_x, 1)` — every scalar feature becomes a length-1 **token**
+    `(batch, dim_theta+dim_x, 1)` — every scalar feature becomes a length-1 **token**
     so a graph transformer can index each θ_i / x_j as a node.
   - `process_conditional`: returns `(thetas[...,None], xs[...,None])`.
   - Normalized variants subtract/divide by the per-token `(1, dim, 1)` stats.
@@ -62,7 +62,7 @@ the shipped `stats/stats_<task>.npz` files. Key facts established by inspection:
   - `GravitationalLensing`: x stats global-scalar `(1, 1, 1)`, θ per-feature
     `(1, 2)`, hardcoded in bfloat16, bespoke `split_data`.
 - **Masks** (graph/causal): `get_base_mask_fn()` returns a boolean adjacency
-  matrix of shape `(dim_θ+dim_x, dim_θ+dim_x)` plus a `base_mask_fn(node_ids,
+  matrix of shape `(dim_theta+dim_x, dim_theta+dim_x)` plus a `base_mask_fn(node_ids,
   node_meta_data)` closure that sub-indexes it. `get_edge_mask_fn(name)` derives
   `faithfull` / `min_faithfull` / `undirected` (moralized) / `directed` / `none`
   variants via `graph.py` (`faithfull_mask`, `min_faithfull_mask`, `moralize`).
@@ -72,7 +72,7 @@ the shipped `stats/stats_<task>.npz` files. Key facts established by inspection:
 
 ## What the producer already provides (we build on this)
 
-- `metadata.json` per task: `dim_parameters`, `dim_data`, `data_kind`
+- `metadata.json` per task (keys post-§0 rename): `dim_theta`, `dim_x`, `data_kind`
   (`vector`/`image`/`timeseries`), `data_shape`, `splits`, `has_reference`,
   `num_observations` (`sbibm_jax/hf/metadata.py`).
 - Upload layout (`sbibm_jax/hf/upload.py`, **confirmed**): main config
@@ -103,6 +103,32 @@ the shipped `stats/stats_<task>.npz` files. Key facts established by inspection:
    trailing channel dim included.
 6. **Default repo = `config.TEST_REPO`** (`SBI-benchmarks-test`), overridable to
    production, consistent with `make_dataset`.
+7. **Nomenclature normalized to `theta`/`x`** package-wide: `dim_parameters` →
+   `dim_theta`, `dim_data` → `dim_x` (see §0). The new loader uses
+   `dim_theta`/`dim_x` natively.
+
+## §0 — Prerequisite: nomenclature normalization (separate step)
+
+`sbibm-jax`'s convention is **`theta` (parameters) / `x` (simulator output)** —
+the stored columns are already `thetas`/`xs`. But the *dimension attributes* are
+inconsistent: the codebase uses `dim_parameters` / `dim_data` across ~14–17 files
+(`Task` base class, every task subclass, the `hf` pipeline, the `metadata.json`
+keys, and tests). There is no `dim_theta`/`dim_x` yet.
+
+Before the loader lands, normalize this package-wide in its **own commit/PR**:
+
+- Rename `dim_parameters` → `dim_theta` and `dim_data` → `dim_x` everywhere:
+  `Task.__init__` params/attributes, all task subclasses, `hf/metadata.py`,
+  `hf/exporter.py`, `hf/reference.py`, and tests. Keep `name_display` etc.
+  untouched.
+- Update the `metadata.json` schema keys (`dim_parameters` → `dim_theta`,
+  `dim_data` → `dim_x`).
+- Refresh `metadata.json` on the **test** repo (cheap: the stored `thetas`/`xs`
+  columns don't change, so no data re-upload; production is untouched —
+  `GenSBI-examples` still reads its old prod schema until its later migration).
+
+This is mechanical but wide; doing it first keeps the loader PR focused and lets
+the loader build on the final names.
 
 ## §1 — New subpackage `sbibm_jax.data`
 
@@ -162,7 +188,7 @@ TaskDataset(
 
 Attributes:
 
-- **Dims:** `dim_parameters`, `dim_data`, `data_kind`, `data_shape`,
+- **Dims:** `dim_theta`, `dim_x`, `data_kind`, `data_shape`,
   `dim_joint` (set only when `kind="joint"`).
 - **Stats** (read from `metadata.json`, native-shaped): `theta_mean`,
   `theta_std`, `x_mean`, `x_std`. `None` when the task ships no stats.
@@ -209,8 +235,8 @@ data kinds.
 
 Output shapes (tokenized, per decision 5):
 
-- `conditional` → `(theta: (B, dim_parameters, 1), x: (B, *data_shape, 1))`
-- `joint` (vector only) → `(B, dim_parameters + dim_data, 1)`
+- `conditional` → `(theta: (B, dim_theta, 1), x: (B, *data_shape, 1))`
+- `joint` (vector only) → `(B, dim_theta + dim_x, 1)`
 
 ## §4 — Stats computed at generation time → `metadata.json`
 
@@ -254,12 +280,12 @@ transformers opt in explicitly:
 
 ```python
 from sbibm_jax.data.masks import get_base_mask_fn, get_edge_mask_fn
-base_fn = get_base_mask_fn("slcp", dim_parameters=5, dim_data=8)
-edge_fn = get_edge_mask_fn("slcp", "undirected", dim_parameters=5, dim_data=8)
+base_fn = get_base_mask_fn("slcp", dim_theta=5, dim_x=8)
+edge_fn = get_edge_mask_fn("slcp", "undirected", dim_theta=5, dim_x=8)
 ```
 
 - **Base masks** (`base.py`): per-task adjacency builders, **parameterized by
-  the task's dims at call time** (`dim_parameters`, `dim_data`) rather than
+  the task's dims at call time** (`dim_theta`, `dim_x`) rather than
   hardcoded, so they cannot silently desync from the data. Ported for the 5
   analytical base tasks; unsupported tasks raise `NotImplementedError` (as
   today).
@@ -298,7 +324,7 @@ sites from the `obs`/`cond` names to the clean names. Tracked separately.
 ## Testing
 
 - **Construction & metadata:** build a small local/mocked `metadata.json` (+ tiny
-  local HF dataset); assert `dim_parameters`/`dim_data`/`data_kind`/`data_shape`
+  local HF dataset); assert `dim_theta`/`dim_x`/`data_kind`/`data_shape`
   and stats parse correctly; default `repo` resolves to `TEST_REPO`.
 - **Processing:** joint/conditional output shapes including the `[...,None]`
   token channel; `kind="joint"` raises for `image`/`timeseries`; `dtype` honored
@@ -307,7 +333,7 @@ sites from the `obs`/`cond` names to the clean names. Tracked separately.
   global-scalar) compare the streamed accumulator against `np.mean/np.std` on a
   small fully-materialized sample; assert published shapes match the documented
   native-axis reductions.
-- **Masks:** base adjacency shapes `(dim_θ+dim_x, dim_θ+dim_x)` for the 5
+- **Masks:** base adjacency shapes `(dim_theta+dim_x, dim_theta+dim_x)` for the 5
   supported tasks; `node_ids` sub-indexing; each edge-transform variant; an
   unsupported task raises `NotImplementedError`.
 - **Reference:** `get_reference` / `get_true_parameters` indexing against a
