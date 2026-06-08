@@ -338,98 +338,69 @@ class TestBuildStats:
 Run: `uv run pytest tests/hf/test_build_dataset.py::TestBuildStats -v`
 Expected: FAIL with `KeyError: 'stats'`.
 
-- [ ] **Step 3: Modify `build.py` to accumulate stats over the train split**
+- [ ] **Step 3: Compute train-split stats from the *materialized* train Dataset**
 
-Replace `_build_split` and `build_dataset` with:
+> **Critical gotcha (why we do NOT accumulate inside the generator):**
+> `Dataset.from_generator` fingerprints the generator + closure and, on a
+> **cache hit** (same task + seed + size → same fingerprint), loads the Arrow
+> file *without ever calling the generator*. Accumulating stats as a generator
+> side effect would then leave the accumulator empty on every re-run, and
+> `finalize()` would divide by zero. Instead, compute stats by iterating the
+> **already-built** train `Dataset` — iterating a materialized dataset always
+> reads rows (cache-independent), and `x` is already stored native-shaped, so
+> no reshape is needed. Bonus: no re-simulation.
+
+Leave `_build_split` exactly as it is today (no `accumulator` param). Add a
+`_compute_train_stats` helper, an `import numpy as np`, the
+`StatsAccumulator`/`resolve_stats_axes` import, and a `"stats"` key in
+`build_dataset`:
 
 ```python
-# src/sbibm_jax/hf/build.py
-"""build_dataset(task_name, **opts): the end-to-end pipeline entry point."""
-
-from typing import Optional
-
-from datasets import Dataset
-
-from sbibm_jax import get_task
-from sbibm_jax.hf import config
-from sbibm_jax.hf.generate import derive_task_keys, iter_chunks
-from sbibm_jax.hf.reference import load_reference
-from sbibm_jax.hf.registry import get_exporter
+# src/sbibm_jax/hf/build.py  (add near the top)
+import numpy as np
 from sbibm_jax.hf.stats import StatsAccumulator, resolve_stats_axes
 
 
-def _build_split(exporter, key, n: int, accumulator=None) -> Dataset:
-    """Stream (theta, x) rows of one split through Dataset.from_generator.
+def _compute_train_stats(task, exporter, train_dataset) -> dict:
+    """Accumulate normalization stats by iterating the built train split.
 
-    When `accumulator` is given, feed each native-shaped chunk into it so the
-    stats are populated as a side effect of the generation pass (from_generator
-    fully consumes the generator while caching).
+    Cache-independent (unlike accumulating inside Dataset.from_generator's
+    generator, which is skipped on a cache hit). x is stored native-shaped.
     """
-    stats: dict = {}
-
-    def row_generator():
-        for theta_chunk, x_flat_chunk in iter_chunks(
-            exporter.task, key, n,
-            resample_invalid=exporter.resample_invalid,
-            chunk_size=exporter.chunk_size,
-            dtype=exporter.dtype,
-            max_factor=exporter.max_factor,
-            stats=stats,
-        ):
-            x_chunk = exporter.shape_x(x_flat_chunk)
-            if accumulator is not None:
-                accumulator.update(theta_chunk, x_chunk)
-            for i in range(theta_chunk.shape[0]):
-                yield {"xs": x_chunk[i], "thetas": theta_chunk[i]}
-
-    return Dataset.from_generator(row_generator, features=exporter.features())
-
-
-def build_dataset(
-    task_name: str,
-    *,
-    train_size: Optional[int] = None,
-    val_size: Optional[int] = None,
-    test_size: Optional[int] = None,
-    chunk_size: int = config.DEFAULT_CHUNK_SIZE,
-    max_factor: float = config.DEFAULT_MAX_FACTOR,
-    dtype=config.DEFAULT_DTYPE,
-    master_seed: int = config.DEFAULT_MASTER_SEED,
-    task_kwargs: Optional[dict] = None,
-) -> dict:
-    """Build the train / validation / test (+ optional reference) bundle.
-
-    Returns a dict with keys "train", "validation", "test", "reference",
-    "stats". "reference" may be None (no reference CSVs); "stats" holds the
-    train-split normalization stats (mean/std for theta and x).
-    """
-    task = get_task(task_name, **(task_kwargs or {}))
-    exporter = get_exporter(
-        task,
-        train_size=train_size,
-        val_size=val_size,
-        test_size=test_size,
-        chunk_size=chunk_size,
-        max_factor=max_factor,
-        dtype=dtype,
-    )
-    keys = derive_task_keys(task.name, master_seed=master_seed)
     theta_axes, x_axes = resolve_stats_axes(task)
-    accumulator = StatsAccumulator(theta_axes, x_axes)
-    train = _build_split(exporter, keys["train"], exporter.train_size, accumulator)
+    acc = StatsAccumulator(theta_axes, x_axes)
+    for batch in train_dataset.with_format("numpy").iter(
+        batch_size=exporter.chunk_size
+    ):
+        acc.update(np.asarray(batch["thetas"]), np.asarray(batch["xs"]))
+    return acc.result()
+```
+
+Then change the `build_dataset` return so the train split is built once and
+reused for stats:
+
+```python
+    keys = derive_task_keys(task.name, master_seed=master_seed)
+    train = _build_split(exporter, keys["train"], exporter.train_size)
     return {
         "train": train,
         "validation": _build_split(exporter, keys["validation"], exporter.val_size),
         "test": _build_split(exporter, keys["test"], exporter.test_size),
         "reference": load_reference(task, exporter),
-        "stats": accumulator.result(),
+        "stats": _compute_train_stats(task, exporter, train),
     }
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+(Also update the `build_dataset` docstring to mention the `"stats"` key.)
 
-Run: `uv run pytest tests/hf/test_build_dataset.py::TestBuildStats -v`
-Expected: PASS.
+- [ ] **Step 4: Run to verify it passes — TWICE (cache-hit regression guard)**
+
+Run it once, then immediately again **without** clearing `~/.cache/huggingface`:
+`uv run pytest tests/hf/test_build_dataset.py::TestBuildStats -v && uv run pytest tests/hf/test_build_dataset.py::TestBuildStats -v`
+Expected: PASS both times. The second run exercises the `Dataset.from_generator`
+cache hit; stats must still be correct (this is the exact failure mode the
+materialized-iteration approach fixes — if stats were accumulated inside the
+generator, the second run would error in `finalize()`).
 
 - [ ] **Step 5: Run the rest of the build tests (no regressions)**
 
@@ -851,19 +822,25 @@ Expected: FAIL with `ModuleNotFoundError: No module named 'sbibm_jax.data.proces
 Each scalar feature becomes a length-1 token via a trailing [..., None] so a
 graph transformer can index it as a node. Normalization (optional) is applied
 post-tokenization with trailing-dim stats, matching GenSBI's process_*_norm.
+
+NumPy throughout (not jnp): grain `.map(collate)` runs in worker subprocesses
+under `mp_prefetch`, and numpy arrays pickle cleanly across the process
+boundary where jax device arrays are a footgun. GenSBI's hot path likewise uses
+np.concatenate. The loader therefore yields numpy arrays; wrap in jnp.asarray
+downstream for jax. `dtype` defaults to np.float32 (jnp.float32 IS np.float32,
+so a jnp dtype passed from TaskDataset works too).
 """
 
-import jax.numpy as jnp
 import numpy as np
 
 
 def _stat_array(values, dtype):
     """metadata stat (native-reduced, e.g. (1, dim)) -> trailing-dim for tokens."""
-    a = jnp.asarray(np.array(values), dtype=dtype)
+    a = np.asarray(np.array(values), dtype=dtype)
     return a[..., None]  # (1, dim) -> (1, dim, 1); (1,1,1) -> (1,1,1,1)
 
 
-def make_collate(*, kind, data_kind, normalize=False, stats=None, dtype=jnp.float32):
+def make_collate(*, kind, data_kind, normalize=False, stats=None, dtype=np.float32):
     """Return a collate fn mapping a {'thetas','xs'} batch to model-ready arrays.
 
     kind="conditional" -> (theta, x); kind="joint" -> concat([theta, x], axis=1).
@@ -886,14 +863,14 @@ def make_collate(*, kind, data_kind, normalize=False, stats=None, dtype=jnp.floa
         xs_ = _stat_array(stats["x_std"], dtype)
 
     def collate(batch):
-        theta = jnp.asarray(batch["thetas"], dtype=dtype)[..., None]
-        x = jnp.asarray(batch["xs"], dtype=dtype)[..., None]
+        theta = np.asarray(batch["thetas"], dtype=dtype)[..., None]
+        x = np.asarray(batch["xs"], dtype=dtype)[..., None]
         if normalize:
             theta = (theta - tm) / ts
             x = (x - xm) / xs_
         if kind == "conditional":
             return theta, x
-        return jnp.concatenate((theta, x), axis=1)
+        return np.concatenate((theta, x), axis=1)
 
     return collate
 ```
@@ -1008,7 +985,7 @@ pass repo=config.DEFAULT_REPO for production.
 
 import json
 
-import jax.numpy as jnp
+import numpy as np
 from datasets import load_dataset
 from huggingface_hub import hf_hub_download
 
@@ -1026,7 +1003,7 @@ class TaskDataset:
         kind="conditional",
         repo=None,
         normalize=False,
-        dtype=jnp.float32,
+        dtype=np.float32,
         seed=42,
         use_prefetching=True,
         max_workers=None,
@@ -1127,6 +1104,16 @@ class TestLoaders:
         from sbibm_jax.data import TaskDataset
         ds = TaskDataset("two_moons", max_workers=64)
         assert ds.max_workers == 8
+
+    def test_prefetching_loader_iterates(self, patched):
+        # The numpy collate must survive grain's mp_prefetch (worker
+        # subprocesses pickle batches across the process boundary). max_workers
+        # small to keep it light on the shared node.
+        from sbibm_jax.data import TaskDataset
+        ds = TaskDataset("two_moons", use_prefetching=True, max_workers=2)
+        loader = ds.get_train_loader(batch_size=2)
+        theta, x = next(iter(loader))
+        assert np.asarray(theta).shape == (2, 2, 1)
 ```
 
 - [ ] **Step 2: Run to verify it fails**
@@ -1301,12 +1288,12 @@ class TaskDataset:
     def _norm(self, arr, mean, std):
         m = _stat_array(mean, self.dtype)
         s = _stat_array(std, self.dtype)
-        return (jnp.asarray(arr, dtype=self.dtype) - m) / s
+        return (np.asarray(arr, dtype=self.dtype) - m) / s
 
     def _unnorm(self, arr, mean, std):
         m = _stat_array(mean, self.dtype)
         s = _stat_array(std, self.dtype)
-        return jnp.asarray(arr, dtype=self.dtype) * s + m
+        return np.asarray(arr, dtype=self.dtype) * s + m
 
     def normalize_theta(self, theta):
         return self._norm(theta, self.theta_mean, self.theta_std)
@@ -1472,8 +1459,22 @@ import jax
 import jax.numpy as jnp
 
 
+def _require_equal_dims(name, dim_theta, dim_x):
+    # These two block layouts (ones((dim_x, dim_theta)) beside a
+    # (dim_theta, dim_x) block; eye(dim_x) in the off-diagonal) only assemble
+    # when dim_theta == dim_x — true for all four tasks that use them. Guard so
+    # an unequal-dim caller gets a clear error instead of a cryptic jnp.block
+    # shape failure.
+    if dim_theta != dim_x:
+        raise NotImplementedError(
+            f"base mask for {name!r} assumes dim_theta == dim_x; "
+            f"got {dim_theta} != {dim_x}."
+        )
+
+
 def _two_moons_like(dim_theta, dim_x):
     # two_moons / gaussian_mixture: x depends on all theta (lower-tri block).
+    _require_equal_dims("two_moons/gaussian_mixture", dim_theta, dim_x)
     thetas_mask = jnp.eye(dim_theta, dtype=jnp.bool_)
     x_mask = jnp.tril(jnp.ones((dim_theta, dim_x), dtype=jnp.bool_))
     return jnp.block([
@@ -1483,6 +1484,7 @@ def _two_moons_like(dim_theta, dim_x):
 
 
 def _gaussian_linear_like(dim_theta, dim_x):
+    _require_equal_dims("gaussian_linear", dim_theta, dim_x)
     thetas_mask = jnp.eye(dim_theta, dtype=jnp.bool_)
     x_i_mask = jnp.eye(dim_x, dtype=jnp.bool_)
     return jnp.block([
