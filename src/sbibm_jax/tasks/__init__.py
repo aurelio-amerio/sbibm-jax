@@ -87,6 +87,10 @@ def get_task(task_name: str, *args: Any, **kwargs: Any) -> Task:
         from sbibm_jax.tasks.toy_lensing.task import ToyLensing
         return ToyLensing(*args, **kwargs)
 
+    elif task_name == "gravitational_waves":
+        from sbibm_jax.tasks.gravitational_waves.task import GravitationalWaves
+        return GravitationalWaves(*args, **kwargs)
+
     else:
         raise NotImplementedError(f"Task '{task_name}' not found.")
 
