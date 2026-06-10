@@ -1,0 +1,21 @@
+{
+    "gaussian_random_field_256": {
+        "x_kind": "image",
+        "x_shape": [
+            256,
+            256
+        ],
+        "theta_kind": "vector",
+        "theta_shape": [
+            2
+        ],
+        "splits": {
+            "train": 100000,
+            "validation": 10000,
+            "test": 10000
+        },
+        "has_reference": false,
+        "num_observations": 10,
+        "stats": null
+    }
+}
