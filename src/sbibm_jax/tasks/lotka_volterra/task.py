@@ -79,6 +79,9 @@ class LotkaVolterra(Task):
         self.days = days
         self.saveat = saveat
 
+        # File-backed: skipped by make_dataset.py (the simulator is not yet implemented fully);
+        self.hf_external = True
+
     def get_labels_parameters(self) -> List[str]:
         return [r"$\alpha$", r"$\beta$", r"$\gamma$", r"$\delta$"]
 

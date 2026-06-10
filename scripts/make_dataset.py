@@ -93,11 +93,12 @@ def main(argv=None):
 
     if args.all:
         task_names = get_available_tasks()
+
     elif args.tasks:
         task_names = args.tasks
     else:
         print("ERROR: pass --tasks NAME [NAME ...] or --all", file=sys.stderr)
-        sys.exit(2)
+        sys.exit(2) 
 
     # File-backed tasks (hf_external=True) are published by their own scripts
     # (e.g. scripts/make_gw_dataset.py), not this simulator-driven path. Skip

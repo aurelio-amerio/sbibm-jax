@@ -93,6 +93,9 @@ class SIR(Task):
         self.saveat = saveat
         self.total_count = total_count
 
+        # File-backed: skipped by make_dataset.py (the simulator is not yet implemented fully);
+        self.hf_external = True
+
     def get_labels_parameters(self) -> List[str]:
         return [r"$\beta$", r"$\gamma$"]
 

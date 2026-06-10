@@ -88,6 +88,9 @@ class BeerMolBioSystems(Task):
         # Lazily built, cached pypesto/AMICI handles.
         self._loaded = None
 
+        # File-backed: skipped by make_dataset.py (the simulator is not yet implemented fully);
+        self.hf_external = True
+
     # --- lazy pypesto/AMICI loading -------------------------------------
 
     def _load(self):
