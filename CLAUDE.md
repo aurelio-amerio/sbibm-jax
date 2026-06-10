@@ -112,9 +112,9 @@ ImportError pointing at `pip install sbibm-jax[hf]`). The key architectural fact
 is the **task ↔ exporter contract**: a task drives the export purely through a
 few optional `hf_*` attributes read via `getattr`-with-defaults in
 `registry.get_exporter`, so *any* task exports as a flat parameter-vector dataset
-with zero task-side changes; declaring `hf_data_kind` switches it to an image or
+with zero task-side changes; declaring `hf_x_kind` switches it to an image or
 time-series storage shape. One full build is:
-`build_dataset(task_name)` → `get_exporter` (dispatches `hf_data_kind` →
+`build_dataset(task_name)` → `get_exporter` (dispatches `hf_x_kind` →
 `VectorExporter` / `ImageExporter` / `TimeSeriesExporter`, which own the HF
 `Features` schema and the flat-to-native reshape) → `derive_task_keys` (stable
 per-task PRNG keys via a `zlib.crc32` fold-in, *not* Python's salted `hash()`) →
@@ -138,7 +138,7 @@ Stats are absent (`null`) under `--dry-run`.
 import-guard pattern as `hf` (informative ImportError → `pip install
 sbibm-jax[loader]`). `from sbibm_jax.data import TaskDataset` loads an
 SBI-benchmarks task straight from the Hub. It is driven *entirely* by the
-published `metadata.json` (dims, `data_kind`/`data_shape`, splits, stats) — no
+published `metadata.json` (x_kind/x_shape, theta_kind/theta_shape, splits, stats) — no
 per-task code. The default repo is the **TEST** repo (`config.TEST_REPO`); pass
 `repo=config.DEFAULT_REPO` for production. `kind="conditional"` serves
 `(theta, x)`; `kind="joint"` concatenates them along the feature axis
@@ -165,10 +165,10 @@ cover only the 5 analytical base tasks (`two_moons`, `gaussian_linear`,
 - Tasks are grouped into "phases" (analytical, ODE, …) reflected in test files,
   not in the package layout.
 - HuggingFace export is opt-in-by-attribute: a task only sets `hf_*` attributes
-  (`hf_data_kind`, `hf_data_shape`, `hf_resample_invalid`, `hf_split_sizes`) when
+  (`hf_x_kind`, `hf_x_shape`, `hf_resample_invalid`, `hf_split_sizes`) when
   it needs to deviate from the flat-vector default. The image tasks
-  `gaussian_random_field` and `toy_lensing` declare `hf_data_kind="image"` plus a
-  2-D `hf_data_shape`; ODE/PEtab tasks set `hf_resample_invalid=True`. The
+  `gaussian_random_field` and `toy_lensing` declare `hf_x_kind="image"` plus a
+  2-D `hf_x_shape`; ODE/PEtab tasks set `hf_resample_invalid=True`. The
   expensive tasks `toy_lensing`, `gaussian_random_field`, and `beer_molbiosystems`
   also set `hf_split_sizes` to cap `train` at `100_000` (vs. the global
   `1_000_000` default); validation/test stay at `10_000`. The
@@ -180,6 +180,19 @@ cover only the 5 analytical base tasks (`two_moons`, `gaussian_linear`,
   budget ladder — each dataset is generated once at its largest useful size and
   consumers subsample smaller budgets by indexing the dataset prefix (valid
   because every `(θ, x)` row is an independent draw).
+
+The `gravitational_waves` task is **file-backed**: it has no simulator yet
+(`get_prior`/`get_simulator` raise `NotImplementedError`) and sets
+`hf_external=True`, so `make_dataset.py` skips it. Its dataset is a fixed corpus
+of pre-generated `(theta, x)` rows (`x` is a `(8192, 2)` two-channel time
+series, `hf_x_kind="timeseries"`). A one-off `scripts/convert_gw_to_npz.py`
+(torch group) converts the raw `.pt` shards to `.npz`; the torch-free
+`scripts/make_gw_dataset.py` then reads those shards, builds the
+train/validation/test splits (mirroring the original `gw_dataset.py`: shard 9 =
+test, last 512 pooled rows = validation, the rest = train), accumulates stats,
+pushes under `config_name="gravitational_waves"`, and merges its block into
+`metadata.json`. There is no reference posterior. The simulator will be added in
+a future rework, at which point GW can move onto the generic generation path.
 
 ## Note on `diffusion-experiments/`
 
