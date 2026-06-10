@@ -153,3 +153,57 @@ class TestNormalizeMethods:
         x = np.ones((3, 2, 1), np.float32)
         back = ds.unnormalize_x(ds.normalize_x(x))
         np.testing.assert_allclose(np.asarray(back), x, atol=1e-5)
+
+
+def _fake_ts_dataset():
+    rows = {"thetas": np.zeros((8, 2), np.float32),
+            "xs": np.ones((8, 5, 2), np.float32)}
+    d = Dataset.from_dict(rows)
+    return DatasetDict({"train": d, "validation": d, "test": d})
+
+
+class TestTimeSeriesLoader:
+    def _meta(self, tmp_path, x_mean, x_std):
+        meta = {"gw": {
+            "x_kind": "timeseries", "x_shape": [5, 2],
+            "theta_kind": "vector", "theta_shape": [2],
+            "splits": {"train": 8, "validation": 8, "test": 8},
+            "has_reference": False, "num_observations": 1,
+            "stats": {
+                "theta_mean": [[0.0, 0.0]], "theta_std": [[1.0, 1.0]],
+                "x_mean": x_mean, "x_std": x_std,
+                "theta_axes": [0], "x_axes": [0, 1],
+            },
+        }}
+        p = tmp_path / "metadata.json"
+        p.write_text(json.dumps(meta))
+        return str(p)
+
+    def test_conditional_shapes(self, monkeypatch, tmp_path):
+        mp = self._meta(tmp_path, [[[0.0, 0.0]]], [[[1.0, 1.0]]])
+        monkeypatch.setattr(
+            "sbibm_jax.data.dataset.hf_hub_download", lambda **kw: mp)
+        monkeypatch.setattr(
+            "sbibm_jax.data.dataset.load_dataset",
+            lambda repo, name=None, **kw: _fake_ts_dataset())
+        from sbibm_jax.data import TaskDataset
+        ds = TaskDataset("gw", kind="conditional")
+        assert ds.x_kind == "timeseries"
+        assert ds.dim_x == 10
+        assert tuple(ds.x_shape) == (5, 2)
+        theta, x = next(iter(ds.get_train_loader(batch_size=4)))
+        assert np.asarray(theta).shape == (4, 2, 1)
+        assert np.asarray(x).shape == (4, 5, 2, 1)
+
+    def test_normalize_broadcasts_per_channel(self, monkeypatch, tmp_path):
+        # x all ones; x_mean 1, x_std 1 -> 0 after normalization.
+        mp = self._meta(tmp_path, [[[1.0, 1.0]]], [[[1.0, 1.0]]])
+        monkeypatch.setattr(
+            "sbibm_jax.data.dataset.hf_hub_download", lambda **kw: mp)
+        monkeypatch.setattr(
+            "sbibm_jax.data.dataset.load_dataset",
+            lambda repo, name=None, **kw: _fake_ts_dataset())
+        from sbibm_jax.data import TaskDataset
+        ds = TaskDataset("gw", normalize=True)
+        _, x = next(iter(ds.get_train_loader(batch_size=4)))
+        np.testing.assert_allclose(np.asarray(x), 0.0, atol=1e-6)
