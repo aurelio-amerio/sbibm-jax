@@ -1,4 +1,4 @@
-"""Tests for DatasetExporter and its data-kind subclasses."""
+"""Tests for DatasetExporter and its x-kind subclasses."""
 
 import numpy as np
 import pytest
@@ -14,10 +14,17 @@ from sbibm_jax.hf.exporter import (
 
 
 class TestVectorExporter:
-    def test_data_kind(self):
+    def test_x_kind(self):
         task = get_task("gaussian_linear")
         exp = VectorExporter(task, train_size=4, val_size=2, test_size=2)
-        assert exp.data_kind == "vector"
+        assert exp.x_kind == "vector"
+
+    def test_theta_defaults(self):
+        task = get_task("gaussian_linear")
+        exp = VectorExporter(task, train_size=4, val_size=2, test_size=2)
+        assert exp.theta_kind == "vector"
+        assert tuple(exp.theta_shape) == (task.dim_theta,)
+        assert tuple(exp.x_shape) == (task.dim_x,)
 
     def test_features_schema(self):
         task = get_task("gaussian_linear")
@@ -45,17 +52,17 @@ class TestVectorExporter:
 
 
 class TestImageExporter:
-    def test_data_kind(self):
+    def test_x_kind(self):
         task = get_task("gaussian_random_field", field_size=8)
         exp = ImageExporter(
-            task, data_shape=(8, 8), train_size=4, val_size=2, test_size=2,
+            task, x_shape=(8, 8), train_size=4, val_size=2, test_size=2,
         )
-        assert exp.data_kind == "image"
+        assert exp.x_kind == "image"
 
     def test_features_schema(self):
         task = get_task("gaussian_random_field", field_size=8)
         exp = ImageExporter(
-            task, data_shape=(8, 8), train_size=4, val_size=2, test_size=2,
+            task, x_shape=(8, 8), train_size=4, val_size=2, test_size=2,
         )
         feats = exp.features()
         assert isinstance(feats["xs"], Array2D)
@@ -65,7 +72,7 @@ class TestImageExporter:
     def test_shape_x_reshapes_to_image(self):
         task = get_task("gaussian_random_field", field_size=8)
         exp = ImageExporter(
-            task, data_shape=(8, 8), train_size=4, val_size=2, test_size=2,
+            task, x_shape=(8, 8), train_size=4, val_size=2, test_size=2,
         )
         flat = np.zeros((5, 8 * 8), dtype=np.float32)
         out = exp.shape_x(flat)
@@ -74,28 +81,24 @@ class TestImageExporter:
 
     def test_rejects_non_2d_shape(self):
         task = get_task("gaussian_random_field", field_size=8)
-        with pytest.raises(ValueError, match="2-D data_shape"):
+        with pytest.raises(ValueError, match="2-D x_shape"):
             ImageExporter(
-                task,
-                data_shape=(8, 8, 3),
-                train_size=4,
-                val_size=2,
-                test_size=2,
+                task, x_shape=(8, 8, 3), train_size=4, val_size=2, test_size=2,
             )
 
 
 class TestTimeSeriesExporter:
-    def test_data_kind(self):
-        task = get_task("gaussian_linear")  # any task; data_shape is what counts
+    def test_x_kind(self):
+        task = get_task("gaussian_linear")  # any task; x_shape is what counts
         exp = TimeSeriesExporter(
-            task, data_shape=(5, 2), train_size=4, val_size=2, test_size=2,
+            task, x_shape=(5, 2), train_size=4, val_size=2, test_size=2,
         )
-        assert exp.data_kind == "timeseries"
+        assert exp.x_kind == "timeseries"
 
     def test_features_schema(self):
         task = get_task("gaussian_linear")
         exp = TimeSeriesExporter(
-            task, data_shape=(5, 2), train_size=4, val_size=2, test_size=2,
+            task, x_shape=(5, 2), train_size=4, val_size=2, test_size=2,
         )
         feats = exp.features()
         assert isinstance(feats["xs"], Array2D)
@@ -105,7 +108,7 @@ class TestTimeSeriesExporter:
     def test_shape_x_reshapes_to_tc(self):
         task = get_task("gaussian_linear")
         exp = TimeSeriesExporter(
-            task, data_shape=(5, 2), train_size=4, val_size=2, test_size=2,
+            task, x_shape=(5, 2), train_size=4, val_size=2, test_size=2,
         )
         flat = np.zeros((7, 5 * 2), dtype=np.float32)
         out = exp.shape_x(flat)
@@ -114,11 +117,7 @@ class TestTimeSeriesExporter:
 
     def test_rejects_non_2d_shape(self):
         task = get_task("gaussian_linear")
-        with pytest.raises(ValueError, match="2-D data_shape"):
+        with pytest.raises(ValueError, match="2-D x_shape"):
             TimeSeriesExporter(
-                task,
-                data_shape=(5,),
-                train_size=4,
-                val_size=2,
-                test_size=2,
+                task, x_shape=(5,), train_size=4, val_size=2, test_size=2,
             )

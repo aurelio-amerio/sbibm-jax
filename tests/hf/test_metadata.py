@@ -16,10 +16,12 @@ class TestMakeMetadata:
     def test_vector_task_schema(self):
         meta = make_metadata(["gaussian_linear"])
         m = meta["gaussian_linear"]
-        assert m["dim_theta"] == 10
-        assert m["dim_x"] == 10
-        assert m["data_kind"] == "vector"
-        assert m["data_shape"] == [10]
+        assert m["x_kind"] == "vector"
+        assert m["x_shape"] == [10]
+        assert m["theta_kind"] == "vector"
+        assert m["theta_shape"] == [10]
+        assert "dim_x" not in m
+        assert "dim_theta" not in m
         assert m["splits"] == {
             "train": 1_000_000,
             "validation": 10_000,
@@ -31,10 +33,11 @@ class TestMakeMetadata:
     def test_image_task_schema(self):
         meta = make_metadata(["gaussian_random_field"])
         m = meta["gaussian_random_field"]
-        assert m["data_kind"] == "image"
-        assert m["data_shape"] == [32, 32]
+        assert m["x_kind"] == "image"
+        assert m["x_shape"] == [32, 32]
+        assert m["theta_kind"] == "vector"
+        assert m["theta_shape"] == [2]
         assert m["has_reference"] is False
-        # Per-task hf_split_sizes override: capped at 100k train.
         assert m["splits"] == {
             "train": 100_000,
             "validation": 10_000,
@@ -55,9 +58,11 @@ class TestMakeMetadata:
     def test_grf_256_image_schema(self):
         meta = make_metadata(["gaussian_random_field_256"])
         m = meta["gaussian_random_field_256"]
-        assert m["data_kind"] == "image"
-        assert m["data_shape"] == [256, 256]
-        assert m["dim_x"] == 256 * 256
+        assert m["x_kind"] == "image"
+        assert m["x_shape"] == [256, 256]
+        assert m["theta_kind"] == "vector"
+        assert m["theta_shape"] == [2]
+        assert "dim_x" not in m
         assert m["has_reference"] is False
         assert m["splits"] == {
             "train": 100_000, "validation": 10_000, "test": 10_000,

@@ -269,8 +269,8 @@ class TestHighResVariant:
         assert task.name_display == "Gaussian Random Field (256x256)"
         assert task.field_size == 256
         assert task.dim_x == 256 * 256
-        assert task.hf_data_kind == "image"
-        assert task.hf_data_shape == (256, 256)
+        assert task.hf_x_kind == "image"
+        assert task.hf_x_shape == (256, 256)
         assert task.hf_split_sizes == {
             "train": 100_000, "validation": 10_000, "test": 10_000,
         }
