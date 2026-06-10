@@ -22,7 +22,7 @@ import logging
 import sys
 from pathlib import Path
 
-from sbibm_jax import get_available_tasks
+from sbibm_jax import get_available_tasks, get_task
 from sbibm_jax.hf import (
     config,
     fetch_remote_metadata,
@@ -98,6 +98,20 @@ def main(argv=None):
     else:
         print("ERROR: pass --tasks NAME [NAME ...] or --all", file=sys.stderr)
         sys.exit(2)
+
+    # File-backed tasks (hf_external=True) are published by their own scripts
+    # (e.g. scripts/make_gw_dataset.py), not this simulator-driven path. Skip
+    # them so --all does not invoke a mock simulator.
+    kept = []
+    for name in task_names:
+        if getattr(get_task(name), "hf_external", False):
+            logging.info(
+                "Skipping %s (external/file-backed; use its dedicated "
+                "upload script).", name,
+            )
+        else:
+            kept.append(name)
+    task_names = kept
 
     repo = config.DEFAULT_REPO if args.prod else config.TEST_REPO
     label = "PRODUCTION" if args.prod else "TEST"

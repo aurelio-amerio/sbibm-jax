@@ -193,3 +193,29 @@ def test_chunk_size_absent_by_default(monkeypatch, tmp_path):
     mod.main(["--tasks", "gaussian_linear", "--metadata-path", str(out)])
 
     assert "chunk_size" not in upload_opts["gaussian_linear"]
+
+
+def test_external_task_skipped(monkeypatch, tmp_path):
+    mod = _load_driver()
+    out = tmp_path / "metadata.json"
+
+    monkeypatch.setattr(mod, "fetch_remote_metadata", lambda repo: {})
+
+    captured = {}
+
+    def fake_upload_metadata(path, repo):
+        captured["meta"] = json.loads(open(path).read())
+
+    uploaded = []
+
+    monkeypatch.setattr(mod, "upload_metadata", fake_upload_metadata)
+    monkeypatch.setattr(
+        mod, "upload_dataset", lambda repo, name, **o: uploaded.append(name))
+
+    mod.main(["--tasks", "gaussian_linear", "gravitational_waves",
+              "--metadata-path", str(out)])
+
+    # gravitational_waves is hf_external -> not generated, not in metadata.
+    assert uploaded == ["gaussian_linear"]
+    assert "gravitational_waves" not in captured["meta"]
+    assert "gaussian_linear" in captured["meta"]
