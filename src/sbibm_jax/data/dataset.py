@@ -1,9 +1,9 @@
 # src/sbibm_jax/data/dataset.py
 """TaskDataset: load an SBI-benchmarks task from the Hub and serve theta/x.
 
-Driven entirely by the published metadata.json (dims, data_kind/shape, splits,
-stats) — no per-task code. Default repo is the TEST repo (config.TEST_REPO);
-pass repo=config.DEFAULT_REPO for production.
+Driven entirely by the published metadata.json (x_kind/x_shape,
+theta_kind/theta_shape, splits, stats) — no per-task code. Default repo is the
+TEST repo (config.TEST_REPO); pass repo=config.DEFAULT_REPO for production.
 """
 
 import json
@@ -49,10 +49,12 @@ class TaskDataset:
         with open(meta_path) as f:
             entry = json.load(f)[name]
 
-        self.dim_theta = int(entry["dim_theta"])
-        self.dim_x = int(entry["dim_x"])
-        self.data_kind = entry["data_kind"]
-        self.data_shape = tuple(entry["data_shape"])
+        self.x_kind = entry["x_kind"]
+        self.x_shape = tuple(entry["x_shape"])
+        self.theta_kind = entry["theta_kind"]
+        self.theta_shape = tuple(entry["theta_shape"])
+        self.dim_x = int(np.prod(self.x_shape))
+        self.dim_theta = int(np.prod(self.theta_shape))
         self.num_observations = int(entry["num_observations"])
         self.has_reference = bool(entry["has_reference"])
         self.dim_joint = self.dim_theta + self.dim_x if kind == "joint" else None
@@ -67,7 +69,7 @@ class TaskDataset:
             self.theta_mean = self.theta_std = self.x_mean = self.x_std = None
 
         self._collate = make_collate(
-            kind=kind, data_kind=self.data_kind,
+            kind=kind, x_kind=self.x_kind, theta_kind=self.theta_kind,
             normalize=normalize, stats=stats, dtype=dtype,
         )
 

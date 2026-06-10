@@ -13,8 +13,9 @@ from sbibm_jax.hf import config
 def _fake_metadata(tmp_path):
     meta = {
         "two_moons": {
-            "dim_theta": 2, "dim_x": 2, "data_kind": "vector",
-            "data_shape": [2], "splits": {"train": 8, "validation": 4, "test": 4},
+            "x_kind": "vector", "x_shape": [2],
+            "theta_kind": "vector", "theta_shape": [2],
+            "splits": {"train": 8, "validation": 4, "test": 4},
             "has_reference": True, "num_observations": 2,
             "stats": {
                 "theta_mean": [[0.0, 0.0]], "theta_std": [[1.0, 1.0]],
@@ -52,8 +53,10 @@ class TestConstruction:
         ds = TaskDataset("two_moons")
         assert ds.dim_theta == 2
         assert ds.dim_x == 2
-        assert ds.data_kind == "vector"
-        assert tuple(ds.data_shape) == (2,)
+        assert ds.x_kind == "vector"
+        assert tuple(ds.x_shape) == (2,)
+        assert ds.theta_kind == "vector"
+        assert tuple(ds.theta_shape) == (2,)
         assert np.array(ds.theta_mean).shape == (1, 2)
 
     def test_default_repo_is_test(self, patched):
@@ -127,9 +130,11 @@ class TestReference:
     def test_get_reference_without_posterior_raises(self, monkeypatch, tmp_path):
         # has_reference False -> informative error
         import json
-        meta = {"t": {"dim_theta": 2, "dim_x": 2, "data_kind": "vector",
-                      "data_shape": [2], "splits": {"train": 8, "validation": 4, "test": 4},
-                      "has_reference": False, "num_observations": 1, "stats": None}}
+        meta = {"t": {"x_kind": "vector", "x_shape": [2],
+                      "theta_kind": "vector", "theta_shape": [2],
+                      "splits": {"train": 8, "validation": 4, "test": 4},
+                      "has_reference": False, "num_observations": 1,
+                      "stats": None}}
         p = tmp_path / "metadata.json"
         p.write_text(json.dumps(meta))
         monkeypatch.setattr("sbibm_jax.data.dataset.hf_hub_download", lambda **kw: str(p))

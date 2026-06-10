@@ -22,19 +22,23 @@ def _stat_array(values, dtype):
     return a[..., None]  # (1, dim) -> (1, dim, 1); (1,1,1) -> (1,1,1,1)
 
 
-def make_collate(*, kind, data_kind, normalize=False, stats=None, dtype=np.float32):
+def make_collate(
+    *, kind, x_kind, theta_kind="vector", normalize=False, stats=None,
+    dtype=np.float32,
+):
     """Return a collate fn mapping a {'thetas','xs'} batch to model-ready arrays.
 
     kind="conditional" -> (theta, x); kind="joint" -> concat([theta, x], axis=1).
-    Joint is vector-only. `stats` is the metadata stats dict (native-reduced).
+    Joint is vector-only (both x and theta). `stats` is the metadata stats dict
+    (native-reduced).
     """
-    if kind == "joint" and data_kind != "vector":
-        raise ValueError(
-            f"kind='joint' is vector-only; task data_kind={data_kind!r} supports "
-            "kind='conditional' only."
-        )
     if kind not in ("joint", "conditional"):
         raise ValueError(f"Unknown kind {kind!r}.")
+    if kind == "joint" and (x_kind != "vector" or theta_kind != "vector"):
+        raise ValueError(
+            f"kind='joint' is vector-only; got x_kind={x_kind!r}, "
+            f"theta_kind={theta_kind!r}. Use kind='conditional'."
+        )
 
     if normalize:
         if stats is None:
