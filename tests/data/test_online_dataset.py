@@ -203,6 +203,27 @@ class TestOnlineLoader:
         assert not np.allclose(np.asarray(theta_n), raw_tok)
 
 
+class TestReferenceStillWorks:
+    def test_get_reference_via_posterior_config(self, monkeypatch, patched_meta):
+        from datasets import Dataset, DatasetDict
+        from sbibm_jax.data import OnlineTaskDataset
+
+        def fake_load(repo, name=None, **kw):
+            assert name == "two_moons_posterior"
+            d = Dataset.from_dict({
+                "observations": np.arange(4, dtype=np.float32).reshape(2, 2),
+                "reference_samples": np.zeros((2, 10, 2), np.float32),
+                "true_parameters": np.ones((2, 2), np.float32),
+            })
+            return DatasetDict({"reference_posterior": d})
+
+        monkeypatch.setattr("sbibm_jax.data.dataset.load_dataset", fake_load)
+        ds = OnlineTaskDataset("two_moons")
+        obs, samples = ds.get_reference(num_observation=2)
+        assert np.asarray(obs).shape == (2,)
+        assert np.asarray(samples).shape == (10, 2)
+
+
 class TestMultiprocessSmoke:
     def test_one_worker_end_to_end(self, patched_meta):
         # Exercises spawn + cloudpickle of the closure-based Simulator,
@@ -223,24 +244,3 @@ class TestMultiprocessSmoke:
             # grain recommends closing mp_prefetch iterators explicitly.
             if hasattr(it, "close"):
                 it.close()
-
-
-class TestReferenceStillWorks:
-    def test_get_reference_via_posterior_config(self, monkeypatch, patched_meta):
-        from datasets import Dataset, DatasetDict
-        from sbibm_jax.data import OnlineTaskDataset
-
-        def fake_load(repo, name=None, **kw):
-            assert name == "two_moons_posterior"
-            d = Dataset.from_dict({
-                "observations": np.arange(4, dtype=np.float32).reshape(2, 2),
-                "reference_samples": np.zeros((2, 10, 2), np.float32),
-                "true_parameters": np.ones((2, 2), np.float32),
-            })
-            return DatasetDict({"reference_posterior": d})
-
-        monkeypatch.setattr("sbibm_jax.data.dataset.load_dataset", fake_load)
-        ds = OnlineTaskDataset("two_moons")
-        obs, samples = ds.get_reference(num_observation=2)
-        assert np.asarray(obs).shape == (2,)
-        assert np.asarray(samples).shape == (10, 2)
