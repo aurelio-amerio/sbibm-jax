@@ -227,9 +227,10 @@ class TestReferenceStillWorks:
 class TestMultiprocessSmoke:
     def test_one_worker_end_to_end(self, patched_meta):
         # Exercises spawn + cloudpickle of the closure-based Simulator,
-        # set_slice (grain calls it with slice(0, None, 1)), _worker_init
-        # (jax -> cpu in the worker), numpy across the pickle boundary, and
-        # the main-process jnp collate.
+        # _worker_init (jax -> cpu in the worker), numpy across the pickle
+        # boundary, and the main-process jnp collate. NOTE: grain skips
+        # set_slice for num_workers==1 (worker_ds = ds in process_prefetch);
+        # that protocol is covered by test_set_slice_changes_stream.
         from sbibm_jax.data import OnlineTaskDataset
         ds = OnlineTaskDataset("two_moons")
         loader = ds.get_online_train_loader(batch_size=2, num_workers=1)
