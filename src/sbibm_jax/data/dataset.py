@@ -43,12 +43,22 @@ class TaskDataset:
             None if max_workers is None else min(int(max_workers), _MAX_WORKERS_CAP)
         )
 
+        self._init_metadata(self._load_metadata_entry())
+        self._init_splits()
+
+    def _load_metadata_entry(self):
+        """Download metadata.json from the Hub and return this task's entry."""
         meta_path = hf_hub_download(
             repo_id=self.repo, filename="metadata.json", repo_type="dataset",
         )
         with open(meta_path) as f:
-            entry = json.load(f)[name]
+            return json.load(f)[self.name]
 
+    def _init_metadata(self, entry):
+        """Shapes, kinds, dims, reference info, stats, and the collate fn.
+
+        Shared by TaskDataset and OnlineTaskDataset.
+        """
         self.x_kind = entry["x_kind"]
         self.x_shape = tuple(entry["x_shape"])
         self.theta_kind = entry["theta_kind"]
@@ -57,9 +67,12 @@ class TaskDataset:
         self.dim_theta = int(np.prod(self.theta_shape))
         self.num_observations = int(entry["num_observations"])
         self.has_reference = bool(entry["has_reference"])
-        self.dim_joint = self.dim_theta + self.dim_x if kind == "joint" else None
+        self.dim_joint = (
+            self.dim_theta + self.dim_x if self.kind == "joint" else None
+        )
 
         stats = entry.get("stats")
+        self._stats = stats
         if stats is not None:
             self.theta_mean = stats["theta_mean"]
             self.theta_std = stats["theta_std"]
@@ -69,16 +82,18 @@ class TaskDataset:
             self.theta_mean = self.theta_std = self.x_mean = self.x_std = None
 
         self._collate = make_collate(
-            kind=kind, x_kind=self.x_kind, theta_kind=self.theta_kind,
-            normalize=normalize, stats=stats, dtype=dtype,
+            kind=self.kind, x_kind=self.x_kind, theta_kind=self.theta_kind,
+            normalize=self.normalize, stats=stats, dtype=self.dtype,
         )
+        self._posterior = None  # lazily loaded in get_reference
 
-        self.dataset = load_dataset(self.repo, name).with_format("numpy")
+    def _init_splits(self):
+        """Offline-only: download the HF splits."""
+        self.dataset = load_dataset(self.repo, self.name).with_format("numpy")
         self.df_train = self.dataset["train"]
         self.df_val = self.dataset["validation"]
         self.df_test = self.dataset["test"]
         self.max_samples = self.df_train.num_rows
-        self._posterior = None  # lazily loaded in get_reference
 
     def _loader(self, split, batch_size, num_samples=None):
         if num_samples is not None:

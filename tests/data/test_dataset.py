@@ -69,6 +69,14 @@ class TestConstruction:
         ds = TaskDataset("two_moons", kind="joint")
         assert ds.dim_joint == 4
 
+    def test_raw_stats_dict_stored(self, patched):
+        # _init_metadata keeps the raw metadata stats dict on the instance so
+        # subclasses (OnlineTaskDataset) can rebuild the collate from it.
+        from sbibm_jax.data import TaskDataset
+        ds = TaskDataset("two_moons")
+        assert ds._stats["theta_mean"] == [[0.0, 0.0]]
+        assert ds._stats["x_std"] == [[1.0, 1.0]]
+
 
 class TestLoaders:
     def test_train_loader_yields_tokenized_batches(self, patched):
