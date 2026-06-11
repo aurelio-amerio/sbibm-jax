@@ -367,3 +367,24 @@ class TestMultiprocessSmoke:
             # grain recommends closing mp_prefetch iterators explicitly.
             if hasattr(it, "close"):
                 it.close()
+
+
+class TestMultiprocessSmokeGRF:
+    def test_one_worker_image_end_to_end(self, patched_meta):
+        # The primary non-vector use case through the real mp path: spawn +
+        # cloudpickle of the FFT closure simulator, _worker_init (jax -> cpu),
+        # native-shaped numpy across the pickle boundary, jnp image tokens in
+        # the main process. NOTE: grain skips set_slice for num_workers==1.
+        from sbibm_jax.data import OnlineTaskDataset
+        ds = OnlineTaskDataset("gaussian_random_field")
+        loader = ds.get_online_train_loader(batch_size=2, num_workers=1)
+        it = iter(loader)
+        try:
+            theta, x = next(it)
+            assert np.asarray(theta).shape == (2, 2, 1)
+            assert np.asarray(x).shape == (2, 32, 32, 1)
+            assert np.isfinite(np.asarray(x)).all()
+        finally:
+            # grain recommends closing mp_prefetch iterators explicitly.
+            if hasattr(it, "close"):
+                it.close()
