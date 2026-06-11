@@ -92,6 +92,17 @@ class TestSimIterDataset:
         batch = next(iter(_SimIterDataset(task, sim, 0, 2)))
         assert batch["xs"].shape == (2, 1024)
 
+    def test_x_shape_mismatch_raises(self):
+        # A wrong metadata x_shape must fail loudly, never silently re-batch
+        # (reshape uses the explicit batch dim, not -1).
+        from sbibm_jax.data.dataset import _SimIterDataset
+        from sbibm_jax.tasks import get_task
+        task = get_task("gaussian_random_field")
+        sim = task.get_simulator(jax.random.PRNGKey(0), max_calls=None)
+        ds = _SimIterDataset(task, sim, 0, 2, x_shape=(16, 16))
+        with pytest.raises((ValueError, TypeError)):
+            next(iter(ds))
+
 
 # ---------------------------------------------------------------------------
 # OnlineTaskDataset (metadata faked locally; never hits the Hub)

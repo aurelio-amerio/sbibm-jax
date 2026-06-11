@@ -247,7 +247,7 @@ class _SimIterator(grain.DatasetIterator):
         if self._p._x_shape is not None:
             # Native layout matching the offline HF rows (metadata x_shape);
             # a free view — same bytes across the pickle boundary.
-            xs = xs.reshape(-1, *self._p._x_shape)
+            xs = xs.reshape(xs.shape[0], *self._p._x_shape)
         # Raw numpy across the pickle boundary; tokenization happens in the
         # main process (make_collate_jax).
         return {"thetas": np.asarray(theta), "xs": xs}
