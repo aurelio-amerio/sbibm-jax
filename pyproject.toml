@@ -7,9 +7,9 @@ requires-python = ">=3.12"
 dependencies = [
     "diffrax>=0.7.2",
     "fyeldgenerator>=0.1.7",
-    "jax[cuda12]>=0.9.1",
+    "jax>=0.9.1",
     "matplotlib>=3.10.8",
-    "numpy>=2.4.2",
+    "numpy>=2.3.5",
     "numpyro>=0.18.0",
     "pandas>=2.0.0",
 ]
