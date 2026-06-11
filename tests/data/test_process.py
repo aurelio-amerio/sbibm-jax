@@ -72,3 +72,54 @@ class TestTimeSeriesConditional:
     def test_joint_raises_for_non_vector_theta(self):
         with pytest.raises(ValueError, match="joint.*vector"):
             make_collate(kind="joint", x_kind="vector", theta_kind="image")
+
+
+class TestMakeCollateJax:
+    """jnp twin of make_collate (online path: collation in the main process)."""
+
+    def test_returns_jax_arrays_with_token_shapes(self):
+        import jax
+        from sbibm_jax.data.process import make_collate_jax
+        collate = make_collate_jax(kind="conditional", x_kind="vector")
+        theta, x = collate(_batch())
+        assert isinstance(theta, jax.Array)
+        assert isinstance(x, jax.Array)
+        assert theta.shape == (2, 3, 1)
+        assert x.shape == (2, 5, 1)
+
+    def test_joint_concats_to_single_jax_array(self):
+        import jax
+        from sbibm_jax.data.process import make_collate_jax
+        collate = make_collate_jax(kind="joint", x_kind="vector")
+        out = collate(_batch())
+        assert isinstance(out, jax.Array)
+        assert out.shape == (2, 3 + 5, 1)
+
+    def test_normalize_applies_stats(self):
+        from sbibm_jax.data.process import make_collate_jax
+        stats = {"theta_mean": [[1.0, 1.0, 1.0]], "theta_std": [[1.0, 1.0, 1.0]],
+                 "x_mean": [[1.0, 1.0, 1.0, 1.0, 1.0]],
+                 "x_std": [[2.0, 2.0, 2.0, 2.0, 2.0]]}
+        collate = make_collate_jax(kind="conditional", x_kind="vector",
+                                   normalize=True, stats=stats)
+        _, x = collate(_batch())
+        # x all ones, mean 1, std 2 -> 0
+        np.testing.assert_allclose(np.asarray(x), 0.0, atol=1e-6)
+
+    def test_normalize_without_stats_raises(self):
+        from sbibm_jax.data.process import make_collate_jax
+        with pytest.raises(ValueError, match="requires stats"):
+            make_collate_jax(kind="conditional", x_kind="vector",
+                             normalize=True)
+
+    def test_joint_raises_for_non_vector(self):
+        from sbibm_jax.data.process import make_collate_jax
+        with pytest.raises(ValueError, match="joint.*vector"):
+            make_collate_jax(kind="joint", x_kind="image")
+        with pytest.raises(ValueError, match="joint.*vector"):
+            make_collate_jax(kind="joint", x_kind="vector", theta_kind="image")
+
+    def test_unknown_kind_raises(self):
+        from sbibm_jax.data.process import make_collate_jax
+        with pytest.raises(ValueError, match="Unknown kind"):
+            make_collate_jax(kind="bogus", x_kind="vector")
