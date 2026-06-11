@@ -69,6 +69,29 @@ class TestSimIterDataset:
         np.testing.assert_array_equal(b2["thetas"], b2_again["thetas"])
         np.testing.assert_array_equal(b2["xs"], b2_again["xs"])
 
+    def test_x_shape_reshapes_to_native(self):
+        # GRF's simulator emits flat (n, 1024); x_shape from metadata makes
+        # the source emit native rows, layout-identical to offline HF rows.
+        from sbibm_jax.data.dataset import _SimIterDataset
+        from sbibm_jax.tasks import get_task
+        task = get_task("gaussian_random_field")
+        sim = task.get_simulator(jax.random.PRNGKey(0), max_calls=None)
+        ds = _SimIterDataset(task, sim, 0, 2, x_shape=(32, 32))
+        batch = next(iter(ds))
+        assert batch["xs"].shape == (2, 32, 32)
+        assert batch["thetas"].shape == (2, 2)
+        assert isinstance(batch["xs"], np.ndarray)
+        assert np.isfinite(batch["xs"]).all()
+
+    def test_x_shape_default_stays_flat(self):
+        # Without x_shape the source keeps the simulator's flat output.
+        from sbibm_jax.data.dataset import _SimIterDataset
+        from sbibm_jax.tasks import get_task
+        task = get_task("gaussian_random_field")
+        sim = task.get_simulator(jax.random.PRNGKey(0), max_calls=None)
+        batch = next(iter(_SimIterDataset(task, sim, 0, 2)))
+        assert batch["xs"].shape == (2, 1024)
+
 
 # ---------------------------------------------------------------------------
 # OnlineTaskDataset (metadata faked locally; never hits the Hub)

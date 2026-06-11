@@ -203,14 +203,20 @@ class _SimIterDataset(grain.IterDataset):
     worker's copy — required for a parentless source IterDataset, and it
     doubles as the per-worker stream id (folded into the PRNG key so workers
     produce independent streams).
+
+    With x_shape set (the published metadata x_shape), the simulator's flat
+    rows are reshaped to (n, *x_shape) before crossing the pickle boundary,
+    so raw batches are layout-identical to offline HF rows (a no-op for
+    vector tasks, native for image/timeseries). None keeps flat output.
     """
 
-    def __init__(self, task, simulator, seed, batch_size):
+    def __init__(self, task, simulator, seed, batch_size, x_shape=None):
         super().__init__()
         self._task = task
         self._simulator = simulator
         self._seed = int(seed)  # plain int; keys built lazily in the iterator
         self._batch_size = int(batch_size)
+        self._x_shape = None if x_shape is None else tuple(x_shape)
         self._worker_index = 0
         self._worker_count = 1
 
@@ -237,9 +243,14 @@ class _SimIterator(grain.DatasetIterator):
         kt, ks = jax.random.split(sub)
         theta = self._p._task.get_prior(kt, self._p._batch_size)
         x = self._p._simulator(ks, theta)
+        xs = np.asarray(x)
+        if self._p._x_shape is not None:
+            # Native layout matching the offline HF rows (metadata x_shape);
+            # a free view — same bytes across the pickle boundary.
+            xs = xs.reshape(-1, *self._p._x_shape)
         # Raw numpy across the pickle boundary; tokenization happens in the
         # main process (make_collate_jax).
-        return {"thetas": np.asarray(theta), "xs": np.asarray(x)}
+        return {"thetas": np.asarray(theta), "xs": xs}
 
     # Abstract on DatasetIterator and genuinely called by grain's worker
     # loop (checkpoint/seek) — real implementations, not stubs. PRNGKey is a
