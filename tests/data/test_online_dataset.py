@@ -204,7 +204,8 @@ class TestOnlineLoader:
 
 
 class TestReferenceStillWorks:
-    def test_get_reference_via_posterior_config(self, monkeypatch, patched_meta):
+    def test_get_reference_via_posterior_config(
+            self, monkeypatch, patched_meta):
         from datasets import Dataset, DatasetDict
         from sbibm_jax.data import OnlineTaskDataset
 

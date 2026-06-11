@@ -148,6 +148,17 @@ gen-time stats from `metadata.json`. `get_train_loader` / `get_val_loader` /
 `get_test_loader` return `grain` pipelines (shuffle→repeat→batch→tokenizing
 collate, optional multiprocess `mp_prefetch`); `max_workers` is clamped to ≤8
 (shared-node rule). `get_train_loader(num_samples=N)` subsamples a prefix.
+`OnlineTaskDataset` (same module) is the simulate-on-the-fly variant: it
+reads the same `metadata.json` (shapes/stats; no split download), builds the
+task's prior + simulator eagerly (`hf_external` tasks fail at construction),
+and serves an infinite `get_online_train_loader(batch_size, seed=,
+num_workers=)` — a custom grain source `IterDataset` that draws fresh
+`(theta, x)` per batch, optionally in CPU spawn workers (`mp_prefetch`;
+worker identity via grain's `set_slice` protocol, CPU forced via
+`jax.config.update` in `worker_init_fn`), collated to jnp tokens in the main
+process via `make_collate_jax`. Offline loaders raise on it; reference
+access still works. Finite-simulator tasks only (not `hf_resample_invalid`
+ODE/PEtab tasks).
 `normalize_theta`/`normalize_x` (+ `unnormalize_*`) expose the stats directly;
 `get_reference`/`get_true_parameters` read the separate `{task}_posterior`
 config (raising when the task ships no reference). Graph/causal masks are

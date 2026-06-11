@@ -75,7 +75,7 @@ class TestTimeSeriesConditional:
 
 
 class TestMakeCollateJax:
-    """jnp twin of make_collate (online path: collation in the main process)."""
+    """jnp twin of make_collate (online path: collation in main process)."""
 
     def test_returns_jax_arrays_with_token_shapes(self):
         import jax
@@ -97,9 +97,11 @@ class TestMakeCollateJax:
 
     def test_normalize_applies_stats(self):
         from sbibm_jax.data.process import make_collate_jax
-        stats = {"theta_mean": [[1.0, 1.0, 1.0]], "theta_std": [[1.0, 1.0, 1.0]],
-                 "x_mean": [[1.0, 1.0, 1.0, 1.0, 1.0]],
-                 "x_std": [[2.0, 2.0, 2.0, 2.0, 2.0]]}
+        stats = {
+            "theta_mean": [[1.0, 1.0, 1.0]], "theta_std": [[1.0, 1.0, 1.0]],
+            "x_mean": [[1.0, 1.0, 1.0, 1.0, 1.0]],
+            "x_std": [[2.0, 2.0, 2.0, 2.0, 2.0]],
+        }
         collate = make_collate_jax(kind="conditional", x_kind="vector",
                                    normalize=True, stats=stats)
         _, x = collate(_batch())
