@@ -131,6 +131,18 @@ def _fake_metadata(tmp_path):
             "has_reference": False, "num_observations": 1,
             "stats": None,
         },
+        # Image task: flat (n, 1024) simulator rows, native (32, 32) storage.
+        "gaussian_random_field": {
+            "x_kind": "image", "x_shape": [32, 32],
+            "theta_kind": "vector", "theta_shape": [2],
+            "splits": {"train": 8, "validation": 4, "test": 4},
+            "has_reference": False, "num_observations": 10,
+            "stats": {
+                "theta_mean": [[0.0, 3.0]], "theta_std": [[0.3, 0.5]],
+                "x_mean": [[[0.1]]], "x_std": [[[2.0]]],
+                "theta_axes": [0], "x_axes": [0, 1, 2],
+            },
+        },
     }
     p = tmp_path / "metadata.json"
     p.write_text(json.dumps(meta))
@@ -163,23 +175,23 @@ class TestOnlineConstruction:
         with pytest.raises(NotImplementedError, match="simulator"):
             OnlineTaskDataset("gravitational_waves")
 
-    def test_non_vector_task_fails_at_construction(
+    def test_non_vector_theta_fails_at_construction(
             self, monkeypatch, patched_meta, tmp_path):
-        # Simulators emit flat rows; the online path has no flat->native
-        # reshape, so non-vector tokenization would be silently wrong.
+        # Theta is served as flat tokens; no task has non-vector theta and
+        # the online path makes no provision for it.
         meta = {"two_moons": {
-            "x_kind": "image", "x_shape": [2, 1],
-            "theta_kind": "vector", "theta_shape": [2],
+            "x_kind": "vector", "x_shape": [2],
+            "theta_kind": "image", "theta_shape": [2, 1],
             "splits": {"train": 8, "validation": 4, "test": 4},
             "has_reference": True, "num_observations": 2, "stats": None,
         }}
-        p = tmp_path / "image_metadata.json"
+        p = tmp_path / "theta_image_metadata.json"
         p.write_text(json.dumps(meta))
         monkeypatch.setattr(
             "sbibm_jax.data.dataset.hf_hub_download", lambda **kw: str(p),
         )
         from sbibm_jax.data import OnlineTaskDataset
-        with pytest.raises(NotImplementedError, match="vector-only"):
+        with pytest.raises(NotImplementedError, match="vector theta"):
             OnlineTaskDataset("two_moons")
 
 
@@ -276,6 +288,62 @@ class TestReferenceStillWorks:
         obs, samples = ds.get_reference(num_observation=2)
         assert np.asarray(obs).shape == (2,)
         assert np.asarray(samples).shape == (10, 2)
+
+
+class TestOnlineLoaderNativeShape:
+    """Non-vector x: worker source reshapes flat -> metadata x_shape."""
+
+    def test_image_tokens_native_shape(self, patched_meta):
+        from sbibm_jax.data import OnlineTaskDataset
+        ds = OnlineTaskDataset("gaussian_random_field")
+        theta, x = next(iter(ds.get_online_train_loader(batch_size=4)))
+        assert isinstance(x, jax.Array)
+        assert theta.shape == (4, 2, 1)
+        assert x.shape == (4, 32, 32, 1)
+        assert np.isfinite(np.asarray(x)).all()
+
+    def test_image_normalize_matches_manual_collate(self, patched_meta):
+        from sbibm_jax.data import OnlineTaskDataset
+        from sbibm_jax.data.dataset import _SimIterDataset
+        from sbibm_jax.data.process import make_collate_jax
+        ds = OnlineTaskDataset("gaussian_random_field", normalize=True)
+        theta_n, x_n = next(iter(
+            ds.get_online_train_loader(batch_size=4, seed=7)))
+        assert x_n.shape == (4, 32, 32, 1)
+        # Same raw draw, collated manually with the same global-scalar stats.
+        raw = next(iter(_SimIterDataset(
+            ds.task, ds.simulator, 7, 4, x_shape=(32, 32))))
+        collate = make_collate_jax(kind="conditional", x_kind="image",
+                                   normalize=True, stats=ds._stats)
+        theta_m, x_m = collate(raw)
+        np.testing.assert_allclose(np.asarray(theta_n), np.asarray(theta_m),
+                                   atol=1e-6)
+        np.testing.assert_allclose(np.asarray(x_n), np.asarray(x_m),
+                                   atol=1e-6)
+        # And it actually normalized (stats are non-trivial in the fixture).
+        raw_tok = np.asarray(raw["xs"], np.float32)[..., None]
+        assert not np.allclose(np.asarray(x_n), raw_tok)
+
+    def test_timeseries_rank_generality(
+            self, monkeypatch, patched_meta, tmp_path):
+        # two_moons faked as a (2, 1) timeseries: element count matches
+        # dim_x=2, proving the reshape is rank-generic without a heavy task.
+        meta = {"two_moons": {
+            "x_kind": "timeseries", "x_shape": [2, 1],
+            "theta_kind": "vector", "theta_shape": [2],
+            "splits": {"train": 8, "validation": 4, "test": 4},
+            "has_reference": True, "num_observations": 2, "stats": None,
+        }}
+        p = tmp_path / "ts_metadata.json"
+        p.write_text(json.dumps(meta))
+        monkeypatch.setattr(
+            "sbibm_jax.data.dataset.hf_hub_download", lambda **kw: str(p),
+        )
+        from sbibm_jax.data import OnlineTaskDataset
+        ds = OnlineTaskDataset("two_moons")
+        theta, x = next(iter(ds.get_online_train_loader(batch_size=4)))
+        assert theta.shape == (4, 2, 1)
+        assert x.shape == (4, 2, 1, 1)
 
 
 class TestMultiprocessSmoke:
