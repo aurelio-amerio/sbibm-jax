@@ -157,8 +157,10 @@ num_workers=)` — a custom grain source `IterDataset` that draws fresh
 worker identity via grain's `set_slice` protocol, CPU forced via
 `jax.config.update` in `worker_init_fn`), collated to jnp tokens in the main
 process via `make_collate_jax`. Offline loaders raise on it; reference
-access still works. Finite-simulator, vector-x/theta tasks only (not
-`hf_resample_invalid` ODE/PEtab tasks; no flat->native reshape yet).
+access still works. Finite-simulator, vector-theta tasks only (not
+`hf_resample_invalid` ODE/PEtab tasks); x is reshaped flat->native from the
+metadata `x_shape` in the worker source, so image/timeseries tasks (e.g.
+`gaussian_random_field`) work online.
 `normalize_theta`/`normalize_x` (+ `unnormalize_*`) expose the stats directly;
 `get_reference`/`get_true_parameters` read the separate `{task}_posterior`
 config (raising when the task ships no reference). Graph/causal masks are
