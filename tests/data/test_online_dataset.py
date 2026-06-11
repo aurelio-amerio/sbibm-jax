@@ -129,6 +129,25 @@ class TestOnlineConstruction:
         with pytest.raises(NotImplementedError, match="simulator"):
             OnlineTaskDataset("gravitational_waves")
 
+    def test_non_vector_task_fails_at_construction(
+            self, monkeypatch, patched_meta, tmp_path):
+        # Simulators emit flat rows; the online path has no flat->native
+        # reshape, so non-vector tokenization would be silently wrong.
+        meta = {"two_moons": {
+            "x_kind": "image", "x_shape": [2, 1],
+            "theta_kind": "vector", "theta_shape": [2],
+            "splits": {"train": 8, "validation": 4, "test": 4},
+            "has_reference": True, "num_observations": 2, "stats": None,
+        }}
+        p = tmp_path / "image_metadata.json"
+        p.write_text(json.dumps(meta))
+        monkeypatch.setattr(
+            "sbibm_jax.data.dataset.hf_hub_download", lambda **kw: str(p),
+        )
+        from sbibm_jax.data import OnlineTaskDataset
+        with pytest.raises(NotImplementedError, match="vector-only"):
+            OnlineTaskDataset("two_moons")
+
 
 class TestOfflineLoadersRaise:
     @pytest.mark.parametrize("method", [

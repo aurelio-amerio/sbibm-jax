@@ -263,7 +263,8 @@ class OnlineTaskDataset(TaskDataset):
     Assumes the simulator always yields finite rows: tasks whose simulators
     legitimately diverge (hf_resample_invalid=True, i.e. ODE/PEtab) are not
     intended for online use, and hf_external tasks without a simulator
-    (gravitational_waves) fail at construction.
+    (gravitational_waves) fail at construction. Vector x/theta only for now:
+    simulators emit flat rows and the online path has no flat->native reshape.
 
     Simulator.num_simulations is only meaningful with num_workers=0: under
     mp_prefetch each worker counts on its own pickled copy.
@@ -301,6 +302,16 @@ class OnlineTaskDataset(TaskDataset):
         self.simulator = self.task.get_simulator(
             jax.random.PRNGKey(self.seed), max_calls=None,
         )
+        # The Simulator wrapper emits flat rows (task.flatten_data); the
+        # offline path reshapes flat -> native at HF-generation time, but the
+        # online path has no reshape step yet, so non-vector tokenization
+        # (image/timeseries) would be silently wrong. Vector-only for now.
+        if self.x_kind != "vector" or self.theta_kind != "vector":
+            raise NotImplementedError(
+                f"OnlineTaskDataset is vector-only for now (simulators emit "
+                f"flat rows); task {name!r} has x_kind={self.x_kind!r}, "
+                f"theta_kind={self.theta_kind!r}."
+            )
 
     def _offline_error(self):
         return NotImplementedError(
