@@ -249,3 +249,90 @@ class _SimIterator(grain.DatasetIterator):
 
     def set_state(self, state):
         self._key = jnp.asarray(state["key"], dtype=jnp.uint32)
+
+
+class OnlineTaskDataset(TaskDataset):
+    """Simulate-on-the-fly variant of TaskDataset.
+
+    Serves fresh (theta, x) batches from the task's prior + simulator instead
+    of the pre-generated HF splits; metadata-driven shapes, stats, and
+    tokenization are identical to TaskDataset (same metadata.json). The HF
+    splits are never downloaded; get_reference/get_true_parameters still work
+    (separate {name}_posterior config).
+
+    Assumes the simulator always yields finite rows: tasks whose simulators
+    legitimately diverge (hf_resample_invalid=True, i.e. ODE/PEtab) are not
+    intended for online use, and hf_external tasks without a simulator
+    (gravitational_waves) fail at construction.
+
+    Simulator.num_simulations is only meaningful with num_workers=0: under
+    mp_prefetch each worker counts on its own pickled copy.
+    """
+
+    def __init__(
+        self,
+        name,
+        *,
+        kind="conditional",
+        repo=None,
+        normalize=False,
+        dtype=jnp.float32,
+        seed=42,
+    ):
+        self.name = name
+        self.kind = kind
+        self.repo = repo if repo is not None else config.TEST_REPO
+        self.normalize = normalize
+        self.dtype = dtype
+        self.seed = seed
+
+        self._init_metadata(self._load_metadata_entry())
+        # Replace the numpy collate set by _init_metadata: the online path
+        # collates in the main process, after the pickle boundary, so jnp is
+        # safe (and saves a host round-trip before the training step).
+        self._collate = make_collate_jax(
+            kind=kind, x_kind=self.x_kind, theta_kind=self.theta_kind,
+            normalize=normalize, stats=self._stats, dtype=dtype,
+        )
+
+        self.task = get_task(name)
+        # Eager build: tasks without a simulator raise NotImplementedError
+        # here, at construction, instead of on the first next().
+        self.simulator = self.task.get_simulator(
+            jax.random.PRNGKey(self.seed), max_calls=None,
+        )
+
+    def _offline_error(self):
+        return NotImplementedError(
+            "OnlineTaskDataset generates batches on the fly; use "
+            "get_online_train_loader."
+        )
+
+    def get_train_loader(self, batch_size, num_samples=None):
+        raise self._offline_error()
+
+    def get_val_loader(self, batch_size):
+        raise self._offline_error()
+
+    def get_test_loader(self, batch_size):
+        raise self._offline_error()
+
+    def get_online_train_loader(self, batch_size, *, seed=None, num_workers=0):
+        """Infinite loader of freshly simulated, tokenized jnp batches.
+
+        Reproducible for a fixed (seed, num_workers); changing num_workers
+        changes the stream (grain stateful-transform caveat) but stays
+        deterministic. num_workers=0 simulates in-process (on the default JAX
+        device); num_workers>=1 simulates in CPU spawn workers, leaving the
+        GPU to the training step. Pass a distinct seed for independent
+        concurrent loaders.
+        """
+        seed = self.seed if seed is None else seed
+        num_workers = min(int(num_workers), _MAX_WORKERS_CAP)
+        ds = _SimIterDataset(self.task, self.simulator, seed, batch_size)
+        if num_workers > 0:
+            ds = ds.mp_prefetch(
+                grain.MultiprocessingOptions(num_workers=num_workers),
+                worker_init_fn=_worker_init,
+            )
+        return ds.map(self._collate)

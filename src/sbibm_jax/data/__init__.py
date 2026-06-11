@@ -18,6 +18,6 @@ except ImportError as e:
         "Install it with `uv sync --extra loader` or `pip install sbibm-jax[loader]`."
     ) from e
 
-from sbibm_jax.data.dataset import TaskDataset  # noqa: E402
+from sbibm_jax.data.dataset import OnlineTaskDataset, TaskDataset  # noqa: E402
 
-__all__ = ["TaskDataset"]
+__all__ = ["OnlineTaskDataset", "TaskDataset"]
