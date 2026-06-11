@@ -1,6 +1,6 @@
 # OnlineTaskDataset — simulate-on-the-fly training loader
 
-**Date:** 2026-06-11
+**Date:** 2026-06-11 (revised 2026-06-11 after grain API verification)
 **Status:** Approved (design)
 
 ## Goal
@@ -25,6 +25,41 @@ tokenization, and normalization identical to the offline `TaskDataset` loaders.
 - No changes to the offline `TaskDataset` behavior or to the existing
   numpy `make_collate`.
 
+## Verified grain 0.2.17 facts (drive the design below)
+
+These were checked against the installed grain source; the design depends on
+them, so re-verify on a grain upgrade:
+
+1. `IterDataset.mp_prefetch(options, worker_init_fn, ...)` exists;
+   `worker_init_fn(worker_index, worker_count)` runs in each worker **before**
+   the dataset is unpickled (`process_prefetch.py`: parse flags →
+   `worker_init_fn()` → `cloudpickle.loads(pickled_ds)`).
+2. `num_workers=0` is a documented no-op — the pipeline runs in-process.
+3. The start method is hard-coded to **spawn**
+   (`mp.get_context("spawn")`, `process_prefetch.py:356`), so workers never
+   inherit an initialized CUDA context. Datasets and the init fn are shipped
+   with **cloudpickle**, so the closure-based `Simulator` and the task instance
+   pickle fine.
+4. **Sharding contract:** with `num_workers >= 1`, grain wraps each worker's
+   copy of the dataset in `_LazyWorkerSliceIterDataset`, which calls
+   `_set_slice_iter_dataset`. For a parentless *source* `IterDataset` this
+   **requires** the `SupportsInPlaceSlicing` protocol —
+   `set_slice(sl, sequential_slice=False)` — otherwise grain raises
+   `ValueError("Cannot slice IterDataset source")`. Worker `i` receives
+   `slice(i, None, num_workers)`, i.e. `sl.start` *is* the worker index and
+   `sl.step` the worker count.
+5. `grain.DatasetIterator` has **abstract** `get_state()` / `set_state(state)`,
+   and the worker loop genuinely calls `set_state` (checkpoint/seek protocol) —
+   they must be real implementations, not `pass`-stubs.
+6. JAX captures env-var defaults (`JAX_PLATFORMS`) at **import** time, and jax
+   is already imported in the worker before `worker_init_fn()` is *called*
+   (cloudpickle loads the init fn by reference → imports its defining module →
+   imports jax transitively via `sbibm_jax`). Therefore
+   `os.environ["JAX_PLATFORMS"] = "cpu"` inside the init fn is silently
+   ineffective; `jax.config.update("jax_platforms", "cpu")` works any time
+   before first backend use, and per fact 1 the init fn runs before anything
+   (the pickled dataset) could touch a backend.
+
 ## Architecture
 
 ### Class layout — `OnlineTaskDataset(TaskDataset)`
@@ -37,6 +72,9 @@ reuse one and skip the other:
 
 - `_init_metadata(entry)` — shapes, kinds, dims, `num_observations`,
   `has_reference`, stats, and `self._collate`. **Shared** by both classes.
+  It must store the raw stats dict as `self._stats` (today `stats` is a local
+  passed straight to `make_collate`) so the subclass can rebuild the collate
+  without re-parsing metadata.
 - `_init_splits()` — `load_dataset(...)`, `df_train/val/test`, `max_samples`.
   **Offline-only.**
 
@@ -45,9 +83,11 @@ reuse one and skip the other:
 
 1. Downloads + parses `metadata.json` and calls `_init_metadata(entry)` (so
    normalization stats and shapes match the published dataset exactly).
-2. Does **not** call `_init_splits()` — pure-online use never triggers a
+2. Rebuilds `self._collate` with `make_collate_jax` (same kwargs, jnp backend),
+   overriding the numpy collate `_init_metadata` set.
+3. Does **not** call `_init_splits()` — pure-online use never triggers a
    dataset download.
-3. Sets `self.task = get_task(name)` and builds the simulator **eagerly**:
+4. Sets `self.task = get_task(name)` and builds the simulator **eagerly**:
    `self.simulator = self.task.get_simulator(key, max_calls=None)`. Building
    eagerly means tasks without a simulator (`gravitational_waves`,
    `hf_external` → `NotImplementedError`) fail immediately at construction with
@@ -62,6 +102,11 @@ Consequences:
 - `get_reference` / `get_true_parameters` still work — they lazily load the
   separate `{name}_posterior` config and do not depend on the train/val/test
   splits. So online training + HF reference for evaluation is a valid combo.
+- The `Simulator.num_simulations` counter is only meaningful in-process: under
+  `mp_prefetch` each worker increments its own pickled copy and the
+  main-process count stays 0. Harmless (`max_calls=None`), but document it in
+  the `get_online_train_loader` docstring so nobody trusts the counter for
+  online runs.
 
 ### Collate — `make_collate_jax` (new, in `process.py`)
 
@@ -78,11 +123,6 @@ def make_collate_jax(*, kind, x_kind, theta_kind="vector", normalize=False,
     # joint -> jnp.concatenate, vector-only guard for joint, [..., None] tokens.
 ```
 
-`OnlineTaskDataset` builds `self._collate` with `make_collate_jax` (overriding
-the numpy collate that `_init_metadata` would otherwise set — i.e.
-`_init_metadata` is given a hook/flag to pick the collate backend, or the
-subclass rebuilds `self._collate` after calling it).
-
 ## Pipeline (grain, `mp_prefetch`)
 
 The loader runs the simulator in CPU worker processes via grain `mp_prefetch`,
@@ -94,47 +134,104 @@ _SimIterDataset (workers, CPU)  ->  mp_prefetch (numpy across pickle boundary)
                                 ->  .map(make_collate_jax) (main, jnp)
 ```
 
-### 1. `_SimIterDataset` — custom infinite `IterDataset` (runs in workers)
+### 1. `_SimIterDataset` — custom infinite source `IterDataset` (runs in workers)
 
-Each worker's iterator folds its **worker index** into the base key so workers
-produce independent streams (without this, every worker replays the *same*
-stream — a silent duplication bug):
+Holds the task, the simulator, the **seed as a plain int** (not a PRNG key
+device array — keys are built lazily inside the iterator, so nothing
+GPU-resident crosses the pickle boundary and iterator state stays trivially
+serializable), and the batch size.
+
+**Worker identity comes from grain's slicing protocol, not from
+`worker_init_fn`** (verified fact 4 — implementing `set_slice` is mandatory
+anyway, and it delivers the worker index for free):
 
 ```python
-key = jax.random.fold_in(base_key, worker_index)   # worker_index via worker_init_fn
-# __next__:
-#   key, sub = jax.random.split(key)
-#   kt, ks   = jax.random.split(sub)
-#   theta    = task.get_prior(kt, batch_size)
-#   x        = simulator(ks, theta)
-#   return {"thetas": np.asarray(theta), "xs": np.asarray(x)}   # numpy, picklable
+class _SimIterDataset(grain.IterDataset):
+    def __init__(self, task, simulator, seed, batch_size):
+        super().__init__()
+        self._task, self._simulator = task, simulator
+        self._seed, self._batch_size = seed, batch_size
+        self._worker_index, self._worker_count = 0, 1
+
+    # grain SupportsInPlaceSlicing: mp_prefetch calls this on each worker's
+    # copy with slice(worker_index, None, num_workers). Required for a source
+    # IterDataset under mp_prefetch; also our per-worker stream seed.
+    def set_slice(self, sl, sequential_slice=False):
+        self._worker_index = sl.start or 0
+        self._worker_count = sl.step or 1
+
+    def __iter__(self):
+        return _SimIterator(self)
 ```
 
-The iterator holds the running key as state and advances it per `__next__`
-(infinite stream). It emits **raw numpy** `{thetas, xs}` — no tokenization in
-the worker — because numpy pickles cleanly across the process boundary while
-jax device arrays are a footgun there.
+With `num_workers=0`, `set_slice` is never called and the defaults
+(`worker_index=0`) apply — the in-process stream equals worker 0's stream.
 
-### 2. `worker_init_fn(worker_index, worker_count)`
+### 2. `_SimIterator` — `grain.DatasetIterator` with real state methods
 
-Runs in each worker before data flows. It:
+Folds the worker index into the base key so workers produce independent
+streams (without this, every worker would replay the *same* stream — a silent
+duplication bug), holds the running key as state, and advances it per
+`__next__` (infinite stream):
 
-- Sets `os.environ["JAX_PLATFORMS"] = "cpu"` so workers simulate on CPU and
-  leave the GPU for training. This requires the **spawn** start method so a
-  worker does not inherit an already-initialized CUDA context from the parent;
-  the implementation must confirm grain's `MultiprocessingOptions` uses (or can
-  be made to use) spawn.
-- Stashes `worker_index` into a module-level global that `_SimIterDataset`
-  reads when constructing its per-worker key.
+```python
+class _SimIterator(grain.DatasetIterator):
+    def __init__(self, parent):
+        super().__init__()
+        self._p = parent
+        base = jax.random.PRNGKey(parent._seed)
+        self._key = jax.random.fold_in(base, parent._worker_index)
 
-### 3. `mp_prefetch`
+    def __next__(self):
+        self._key, sub = jax.random.split(self._key)
+        kt, ks = jax.random.split(sub)
+        theta = self._p._task.get_prior(kt, self._p._batch_size)
+        x = self._p._simulator(ks, theta)
+        return {"thetas": np.asarray(theta), "xs": np.asarray(x)}
 
-`.mp_prefetch(grain.MultiprocessingOptions(num_workers=N), worker_init_fn=_init)`.
-`num_workers=0` is a valid no-op mode → simulation runs in-process (on GPU);
-`worker_index` defaults to 0. `num_workers` is clamped to `_MAX_WORKERS_CAP` (8;
-shared-node rule).
+    # get_state/set_state are ABSTRACT on DatasetIterator and the grain worker
+    # loop calls set_state (checkpoint/seek). Real implementations, not stubs:
+    def get_state(self):
+        return {"key_data": np.asarray(jax.random.key_data(self._key)).tolist()}
 
-### 4. Main-process `.map(make_collate_jax)`
+    def set_state(self, state):
+        self._key = jnp.asarray(state["key_data"], dtype=jnp.uint32)
+```
+
+It emits **raw numpy** `{thetas, xs}` — no tokenization in the worker — because
+numpy pickles cheaply across the process boundary while jax device arrays are a
+footgun there.
+
+### 3. `worker_init_fn(worker_index, worker_count)`
+
+Runs in each worker before data flows. Its **only** job is forcing JAX onto
+CPU so workers simulate on CPU and leave the GPU (and its default memory
+preallocation) for training:
+
+```python
+def _worker_init(worker_index, worker_count):
+    import jax
+    jax.config.update("jax_platforms", "cpu")
+```
+
+- It must use `jax.config.update`, **not** `os.environ["JAX_PLATFORMS"]` —
+  the env var is captured at jax import time and jax is already imported in
+  the worker before the init fn is called (verified fact 6). The config update
+  works because the init fn runs before the dataset (and its first jax op) is
+  unpickled (verified fact 1).
+- Spawn start method is guaranteed by grain itself (verified fact 3) — no
+  inherited CUDA context to worry about.
+- It does **not** carry the worker index; that arrives via `set_slice`
+  (section 1).
+
+### 4. `mp_prefetch`
+
+`.mp_prefetch(grain.MultiprocessingOptions(num_workers=N), worker_init_fn=_worker_init)`.
+`num_workers=0` is a valid no-op mode → simulation runs in-process (on GPU,
+since `_worker_init` never runs); `worker_index` defaults to 0. `num_workers`
+is clamped to `_MAX_WORKERS_CAP` (8; shared-node rule).
+
+### 5. Main-process `.map(make_collate_jax)`
 
 A `.map` chained after `mp_prefetch` runs in the consumer (main) process. This
 is where tokenization, optional normalization, and the jnp conversion happen,
@@ -150,7 +247,7 @@ numpy.
 
 ```python
 def get_online_train_loader(self, batch_size, *, seed=None, num_workers=0):
-    base_key = jax.random.PRNGKey(self.seed if seed is None else seed)
+    seed = self.seed if seed is None else seed
     ...
 ```
 
@@ -175,8 +272,11 @@ def get_online_train_loader(self, batch_size, *, seed=None, num_workers=0):
 ## Testing
 
 CPU-forced like the rest of the suite (`JAX_PLATFORMS=cpu`). Use a cheap
-analytical task (e.g. `gaussian_linear` / `two_moons`). These tasks need no HF
-split download (metadata + optional posterior only).
+analytical task (e.g. `gaussian_linear` / `two_moons`). **No network:** reuse
+the existing `tests/data/test_dataset.py` pattern of monkeypatching
+`hf_hub_download` to a local fake `metadata.json` (online tests never need the
+split download, only metadata + optional posterior — both already faked by
+that fixture).
 
 - Construction: `OnlineTaskDataset(name)` builds; simulator created eagerly.
 - `get_online_train_loader(batch_size)` with **`num_workers=0`** (in-process,
@@ -187,12 +287,11 @@ split download (metadata + optional posterior only).
 - Fresh draws: consecutive batches differ.
 - Normalization: `normalize=True` output equals `make_collate_jax` applied
   manually to a known prior+sim draw.
+- `set_slice`: calling it with `slice(1, None, 2)` changes the stream vs. the
+  default worker-0 stream (unit-level, no multiprocessing needed).
+- State round-trip: `get_state` → fresh iterator → `set_state` reproduces the
+  next batch.
 - Offline loaders raise the informative `NotImplementedError`; `get_reference`
   still works for a task that ships a reference.
-- One smoke test with `num_workers=1` to exercise the worker / `worker_init_fn`
-  / pickle path (kept minimal for CI cost).
-```
-
-The grain `IterDataset` / `DatasetIterator` subclassing API and the
-spawn-context behavior of `MultiprocessingOptions` are the two details to verify
-first during implementation.
+- One smoke test with `num_workers=1` to exercise the worker / `set_slice` /
+  `worker_init_fn` / cloudpickle path end to end (kept minimal for CI cost).
