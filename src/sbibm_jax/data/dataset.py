@@ -9,12 +9,15 @@ TEST repo (config.TEST_REPO); pass repo=config.DEFAULT_REPO for production.
 import json
 
 import grain
+import jax
+import jax.numpy as jnp
 import numpy as np
 from datasets import load_dataset
 from huggingface_hub import hf_hub_download
 
 from sbibm_jax.hf import config
-from sbibm_jax.data.process import make_collate, _stat_array
+from sbibm_jax.data.process import make_collate, make_collate_jax, _stat_array
+from sbibm_jax.tasks import get_task
 
 _MAX_WORKERS_CAP = 8  # shared node; never exceed (see CLAUDE.md / memory).
 
@@ -176,3 +179,73 @@ class TaskDataset:
 
     def unnormalize_x(self, x):
         return self._unnorm(x, self.x_mean, self.x_std)
+
+
+def _worker_init(worker_index, worker_count):
+    """grain mp_prefetch worker init: force JAX onto CPU in the worker.
+
+    Must be jax.config.update, not os.environ["JAX_PLATFORMS"]: jax captures
+    the env var at import time, and jax is already imported here (cloudpickle
+    loads this function by reference, importing this module first). The
+    update is effective because grain runs worker_init_fn before unpickling
+    the dataset — i.e. before anything touches a JAX backend. Spawn start
+    method is guaranteed by grain itself.
+    """
+    del worker_index, worker_count
+    jax.config.update("jax_platforms", "cpu")
+
+
+class _SimIterDataset(grain.IterDataset):
+    """Infinite source IterDataset drawing (theta, x) from prior + simulator.
+
+    Implements grain's SupportsInPlaceSlicing protocol: under mp_prefetch,
+    grain calls set_slice(slice(worker_index, None, num_workers)) on each
+    worker's copy — required for a parentless source IterDataset, and it
+    doubles as the per-worker stream id (folded into the PRNG key so workers
+    produce independent streams).
+    """
+
+    def __init__(self, task, simulator, seed, batch_size):
+        super().__init__()
+        self._task = task
+        self._simulator = simulator
+        self._seed = int(seed)  # plain int; keys built lazily in the iterator
+        self._batch_size = int(batch_size)
+        self._worker_index = 0
+        self._worker_count = 1
+
+    def set_slice(self, sl, sequential_slice=False):
+        del sequential_slice
+        self._worker_index = sl.start or 0
+        self._worker_count = sl.step or 1
+
+    def __iter__(self):
+        return _SimIterator(self)
+
+
+class _SimIterator(grain.DatasetIterator):
+    """Iterator holding the running PRNG key as checkpointable state."""
+
+    def __init__(self, parent):
+        super().__init__()
+        self._p = parent
+        base = jax.random.PRNGKey(parent._seed)
+        self._key = jax.random.fold_in(base, parent._worker_index)
+
+    def __next__(self):
+        self._key, sub = jax.random.split(self._key)
+        kt, ks = jax.random.split(sub)
+        theta = self._p._task.get_prior(kt, self._p._batch_size)
+        x = self._p._simulator(ks, theta)
+        # Raw numpy across the pickle boundary; tokenization happens in the
+        # main process (make_collate_jax).
+        return {"thetas": np.asarray(theta), "xs": np.asarray(x)}
+
+    # Abstract on DatasetIterator and genuinely called by grain's worker
+    # loop (checkpoint/seek) — real implementations, not stubs. PRNGKey is a
+    # raw uint32 (2,) array, so the key IS the state.
+    def get_state(self):
+        return {"key": np.asarray(self._key).tolist()}
+
+    def set_state(self, state):
+        self._key = jnp.asarray(state["key"], dtype=jnp.uint32)
