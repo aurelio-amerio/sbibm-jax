@@ -9,10 +9,10 @@ NumPy throughout (not jnp): grain `.map(collate)` runs in worker subprocesses
 under `mp_prefetch`, and numpy arrays pickle cleanly across the process
 boundary where jax device arrays are a footgun. GenSBI's hot path likewise uses
 np.concatenate. The loader therefore yields numpy arrays; wrap in jnp.asarray
-downstream for jax. `dtype` defaults to np.float32 (jnp.float32 IS np.float32,
-so a jnp dtype passed from TaskDataset works too).
-make_collate_jax is the jnp twin for the online path (OnlineTaskDataset),
-where collation runs in the main process after the pickle boundary.
+downstream for jax. make_collate_jax is the jnp twin for the online path
+(OnlineTaskDataset), where collation runs in the main process after the pickle
+boundary. `dtype` defaults to np.float32 (jnp.float32 IS np.float32, so a jnp
+dtype passed from TaskDataset works too).
 """
 
 import numpy as np
