@@ -1,8 +1,30 @@
 [project]
 name = "sbibm-jax"
 version = "0.1.1"
-description = "Simulation-Based Inference Benchmark — JAX rewrite"
+description = "Simulators and datasets for simulation-based inference benchmarks in JAX/NumPyro"
 readme = "README.md"
+authors = [{ name = "Aurelio Amerio", email = "dev@gensbi.com" }]
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = [
+    "simulation-based-inference",
+    "sbi",
+    "benchmark",
+    "jax",
+    "numpyro",
+    "bayesian-inference",
+    "datasets",
+    "machine-learning",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 requires-python = ">=3.12"
 dependencies = [
     "diffrax>=0.7.2",
@@ -34,6 +56,11 @@ pypesto = [
     # default StringDtype; pin to the pandas 2.x line.
     "pandas<3.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/aurelio-amerio/sbibm-jax"
+Repository = "https://github.com/aurelio-amerio/sbibm-jax"
+Issues = "https://github.com/aurelio-amerio/sbibm-jax/issues"
 
 [dependency-groups]
 torch = [

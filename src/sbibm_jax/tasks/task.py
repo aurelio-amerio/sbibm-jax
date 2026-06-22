@@ -2,7 +2,7 @@
 
 from abc import abstractmethod
 from pathlib import Path
-from typing import Callable, List, Optional
+from typing import TYPE_CHECKING, Callable, List, Optional
 
 import jax
 import jax.numpy as jnp
@@ -10,6 +10,9 @@ import numpy as np
 import pandas as pd
 
 from sbibm_jax.utils.io import get_array_from_csv, save_array_to_csv
+
+if TYPE_CHECKING:
+    from sbibm_jax.tasks.simulator import Simulator
 
 
 class Task:
