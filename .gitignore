@@ -211,5 +211,6 @@ uv.lock
 references
 
 diffusion-experiments
+amici_models
 
 sub/condor_logs

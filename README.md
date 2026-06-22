@@ -6,7 +6,6 @@ A JAX/NumPyro library including several SBI benchmarks. Includes a port of [sbib
 ![Tests](https://raw.githubusercontent.com/aurelio-amerio/sbibm-jax/refs/heads/main/img/badges/tests.svg)
 ![Coverage](https://raw.githubusercontent.com/aurelio-amerio/sbibm-jax/refs/heads/main/img/badges/coverage.svg)
 [![PyPI](https://img.shields.io/pypi/v/sbibm-jax.svg)](https://pypi.org/project/sbibm-jax/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/license/mit)
 
 ## Overview
 
