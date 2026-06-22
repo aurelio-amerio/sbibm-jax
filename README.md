@@ -1,6 +1,6 @@
 # sbibm-jax
 
-A JAX/NumPyro rewrite of the Simulation-Based Inference Benchmark (sbibm): benchmark tasks — priors, simulators, and reference posteriors — plus ready-to-stream HuggingFace datasets for evaluating SBI methods.
+A JAX/NumPyro library including several SBI benchmarks. Includes a port of [sbibm](https://github.com/sbi-benchmark/sbibm)
 
 [![Build](https://github.com/aurelio-amerio/sbibm-jax/actions/workflows/python-app.yml/badge.svg)](https://github.com/aurelio-amerio/sbibm-jax/actions/workflows/python-app.yml)
 ![Tests](https://raw.githubusercontent.com/aurelio-amerio/sbibm-jax/refs/heads/main/img/badges/tests.svg)
@@ -69,8 +69,7 @@ posterior = task.get_reference_posterior_samples(num_observation=1)  # (N, dim_t
 from sbibm_jax.data import TaskDataset
 
 ds = TaskDataset(
-    "two_moons",
-    repo="aurelio-amerio/SBI-benchmarks",   # published dataset (the in-code default is the -test repo)
+    "two_moons",  
     normalize=True,                          # apply gen-time mean/std from metadata.json
 )
 
