@@ -1,0 +1,87 @@
+# Installs dependencies, lints, runs the test suite, and publishes
+# coverage/test badges. Adapted from GenSBI (Sphinx docs jobs dropped;
+# badge commit uses the default GITHUB_TOKEN instead of a GitHub App).
+name: Build
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+      - name: Install dependencies
+        run: uv sync --group lint
+      - name: Lint with flake8
+        run: |
+          # stop the build if there are Python syntax errors or undefined names
+          uv run flake8 src tests --count --select=E9,F63,F7,F82 --show-source --statistics
+          # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+          uv run flake8 src tests --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+      - name: Install dependencies
+        run: uv sync --group test --group hf --group loader
+      - name: Run fast tests
+        run: |
+          uv run pytest -m "not slow and not experimental" --junitxml=reports/junit/junit-fast.xml --cov=sbibm_jax --cov-report=term-missing
+      - name: Run slow tests
+        run: |
+          uv run pytest -m "slow" --junitxml=reports/junit/junit-slow.xml --cov=sbibm_jax --cov-append --cov-report=term-missing
+      - name: Run experimental tests
+        run: |
+          uv run pytest -m "experimental" --junitxml=reports/junit/junit-experimental.xml --cov=sbibm_jax --cov-append --cov-report=xml:reports/coverage/coverage.xml --cov-report=term-missing
+      - name: Merge Test Reports
+        run: |
+          uv run python -m junitparser merge reports/junit/junit-fast.xml reports/junit/junit-slow.xml reports/junit/junit-experimental.xml reports/junit/junit.xml
+      - name: Generate Badges
+        run: |
+          uv run genbadge coverage --input-file reports/coverage/coverage.xml --output-file reports/badges/coverage.svg
+          uv run genbadge tests --input-file reports/junit/junit.xml --output-file reports/badges/tests.svg
+      - name: Upload Test Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: reports/
+
+  publish-badges:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Test Reports
+        uses: actions/download-artifact@v4
+        with:
+          name: test-reports
+          path: reports
+      - name: Prepare Badges
+        run: |
+          mkdir -p img/badges
+          cp -r reports/badges/*.svg img/badges/
+      - name: Commit and push badges
+        uses: stefanzweifel/git-auto-commit-action@v6
+        with:
+          commit_message: "Update badges [skip ci]"
+          branch: main
+          file_pattern: img/badges/*.svg
