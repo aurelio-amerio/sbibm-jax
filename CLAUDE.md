@@ -122,8 +122,10 @@ and two simulator backends behind one seam: healpy/NumPy (default;
 ground truth — observations always use it) and jax-healpy (`[jaxhp]`
 extra; jit/GPU, used for HF generation via the `hf_backend="jax"` hint
 honored in `hf.build`). Reference posteriors are exact (anafast +
-Gaussian spectrum likelihood, blackjax adjusted MCLMC in
-`reference_posterior.py`); canonical noiseless nside 64/128 configs ship
+Gaussian spectrum likelihood — restricted to ℓ ≤ 2·nside because
+anafast is aliasing-biased above that, see `reference_posterior.py`'s
+docstring — blackjax adjusted MCLMC); canonical noiseless nside 64/128
+configs ship
 per-config `.npz` observations/references under `files/nside_<n>/`,
 other configs generate observations seed-derived on the fly and sample
 references live. Maps are RING-ordered; `hf_x_kind="healpix"` stores

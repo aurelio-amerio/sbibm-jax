@@ -1,9 +1,14 @@
 """Exact spectrum likelihood + blackjax adjusted-MCLMC reference.
 
-Full-sky Gaussian field: -2 ln L = sum_{l>=2} (2l+1) [Chat_l/D_l
-+ ln D_l], D_l = C_l(theta) + N_l. Sampling runs in unconstrained
-z-space (sigmoid box transform, log-Jacobian added), adapted from
-GenSBI's blackjax>=1.6 MCLMC sampler.
+Full-sky Gaussian field: -2 ln L = sum_{l=2..2*nside} (2l+1)
+[Chat_l/D_l + ln D_l], D_l = C_l(theta) + N_l. The sum stops at
+2*nside, not the 3*nside-1 band limit: HEALPix quadrature/aliasing
+suppresses anafast power by up to ~7% for 2*nside < l < 3*nside
+(measured on the canonical maps), which biased truths to ~2.5-3.8
+sigma of the fitted posterior; below 2*nside the estimator is
+unbiased to cosmic-variance precision. Sampling runs in
+unconstrained z-space (sigmoid box transform, log-Jacobian added),
+adapted from GenSBI's blackjax>=1.6 MCLMC sampler.
 """
 
 import healpy as hp
@@ -133,11 +138,14 @@ def sample_reference_posterior(
     """
     import blackjax.diagnostics as bj_diag
 
-    lmax = 3 * nside - 1
+    # Likelihood band limit: 2*nside, NOT the 3*nside-1 map band
+    # limit — anafast is aliasing-biased above 2*nside (module
+    # docstring). The maps themselves still carry power to 3*nside-1.
+    lmax_like = 2 * nside
     npix = 12 * nside * nside
-    cl_hat = compute_cl_hat(observation, lmax)
+    cl_hat = compute_cl_hat(observation, lmax_like)
     logdensity = make_logdensity(
-        cl_hat, noise_std, npix, lmax, 64.0, low, high
+        cl_hat, noise_std, npix, lmax_like, 64.0, low, high
     )
     low = jnp.asarray(low)
     high = jnp.asarray(high)

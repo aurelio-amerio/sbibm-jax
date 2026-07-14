@@ -417,3 +417,39 @@ class TestCanonicalFiles:
         assert s.shape == (10000, 3)
         assert np.all(s >= np.asarray(task.prior_params["low"]))
         assert np.all(s <= np.asarray(task.prior_params["high"]))
+
+
+class TestReferenceCalibration:
+    """Truth-vs-posterior calibration of the shipped references.
+
+    If the likelihood is unbiased, z = (theta_true - post_mean) /
+    post_std is ~N(0, 1) per observation, so the mean z over the 10
+    canonical observations is ~N(0, 1/sqrt(10)); |mean z| < 0.8 is a
+    2.5-sigma gate. The pre-fix references (likelihood summed to
+    3*nside-1, aliasing-biased band included) failed this at mean
+    z(n) = +2.5 (nside 64) and mean z(alpha) = +3.4 (nside 128).
+    """
+
+    @pytest.mark.parametrize(
+        "task_name", ["spherical_grf", "spherical_grf_128"]
+    )
+    def test_truth_z_scores_unbiased(self, task_name):
+        task = get_task(task_name)
+        npz = task.path / "files" / f"nside_{task.nside}"
+        if not (npz / "reference_posterior_samples.npz").exists():
+            pytest.skip("canonical npz not generated yet")
+        zs = []
+        for n in range(1, task.num_observations + 1):
+            s = np.asarray(
+                task.get_reference_posterior_samples(n),
+                dtype=np.float64,
+            )
+            truth = np.asarray(
+                task.get_true_parameters(n), dtype=np.float64
+            )[0]
+            zs.append((truth - s.mean(0)) / s.std(0, ddof=1))
+        mean_z = np.mean(zs, axis=0)
+        assert np.all(np.abs(mean_z) < 0.8), (
+            f"reference posteriors biased: mean z (logA, n, alpha) "
+            f"= {mean_z}"
+        )
