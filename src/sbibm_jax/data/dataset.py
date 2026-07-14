@@ -22,6 +22,13 @@ from sbibm_jax.tasks import get_task
 _MAX_WORKERS_CAP = 8  # shared node; never exceed (see CLAUDE.md / memory).
 
 
+def _healpix_nest_perm(nside: int):
+    """Index array p with map_nest = map_ring[p]."""
+    import healpy as hp
+
+    return hp.nest2ring(nside, np.arange(12 * nside * nside))
+
+
 class TaskDataset:
     def __init__(
         self,
@@ -34,6 +41,7 @@ class TaskDataset:
         seed=42,
         use_prefetching=True,
         max_workers=None,
+        ordering="ring",
     ):
         self.name = name
         self.kind = kind
@@ -45,6 +53,7 @@ class TaskDataset:
         self.max_workers = (
             None if max_workers is None else min(int(max_workers), _MAX_WORKERS_CAP)
         )
+        self.ordering = ordering
 
         self._init_metadata(self._load_metadata_entry())
         self._init_splits()
@@ -84,11 +93,31 @@ class TaskDataset:
         else:
             self.theta_mean = self.theta_std = self.x_mean = self.x_std = None
 
+        self._x_perm = self._resolve_x_perm(entry)
+
         self._collate = make_collate(
             kind=self.kind, x_kind=self.x_kind, theta_kind=self.theta_kind,
             normalize=self.normalize, stats=stats, dtype=self.dtype,
+            x_perm=self._x_perm,
         )
         self._posterior = None  # lazily loaded in get_reference
+
+    def _resolve_x_perm(self, entry):
+        # getattr fallback: OnlineTaskDataset only sets self.ordering
+        # from Task 8 on; until then it behaves as "ring".
+        ordering = getattr(self, "ordering", "ring")
+        if ordering == "ring":
+            return None
+        if ordering != "nest":
+            raise ValueError(
+                f"ordering must be 'ring' or 'nest', got {ordering!r}."
+            )
+        if self.x_kind != "healpix":
+            raise ValueError(
+                "ordering='nest' requires a healpix dataset "
+                f"(x_kind={self.x_kind!r})."
+            )
+        return _healpix_nest_perm(int(entry["nside"]))
 
     def _init_splits(self):
         """Offline-only: download the HF splits."""

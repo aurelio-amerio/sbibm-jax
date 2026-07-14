@@ -22,7 +22,26 @@ def _fake_metadata(tmp_path):
                 "x_mean": [[0.0, 0.0]], "x_std": [[1.0, 1.0]],
                 "theta_axes": [0], "x_axes": [0],
             },
-        }
+        },
+        "healpix_task": {
+            "x_kind": "healpix",
+            "x_shape": [48],
+            "nside": 2,
+            "ordering": "ring",
+            "theta_kind": "vector",
+            "theta_shape": [3],
+            "splits": {"train": 8, "validation": 4, "test": 4},
+            "has_reference": False,
+            "num_observations": 10,
+            "stats": {
+                "theta_mean": [[0.0, 0.0, 0.0]],
+                "theta_std": [[1.0, 1.0, 1.0]],
+                "x_mean": [[[0.0]]],
+                "x_std": [[[1.0]]],
+                "theta_axes": [0],
+                "x_axes": [0, 1],
+            },
+        },
     }
     p = tmp_path / "metadata.json"
     p.write_text(json.dumps(meta))
@@ -35,6 +54,21 @@ def _fake_main_dataset():
     return DatasetDict({"train": d, "validation": d, "test": d})
 
 
+def _fake_healpix_dataset():
+    xs = np.stack(
+        [np.arange(48, dtype=np.float32) + i for i in range(8)]
+    )
+    rows = {"thetas": np.zeros((8, 3), np.float32), "xs": xs}
+    d = Dataset.from_dict(rows)
+    return DatasetDict({"train": d, "validation": d, "test": d})
+
+
+def _fake_load_dataset(repo, name=None, **kw):
+    if name == "healpix_task":
+        return _fake_healpix_dataset()
+    return _fake_main_dataset()
+
+
 @pytest.fixture
 def patched(monkeypatch, tmp_path):
     meta_path = _fake_metadata(tmp_path)
@@ -42,8 +76,7 @@ def patched(monkeypatch, tmp_path):
         "sbibm_jax.data.dataset.hf_hub_download", lambda **kw: meta_path,
     )
     monkeypatch.setattr(
-        "sbibm_jax.data.dataset.load_dataset",
-        lambda repo, name=None, **kw: _fake_main_dataset(),
+        "sbibm_jax.data.dataset.load_dataset", _fake_load_dataset,
     )
 
 
@@ -215,3 +248,41 @@ class TestTimeSeriesLoader:
         ds = TaskDataset("gw", normalize=True)
         _, x = next(iter(ds.get_train_loader(batch_size=4)))
         np.testing.assert_allclose(np.asarray(x), 0.0, atol=1e-6)
+
+
+class TestHealpixOrdering:
+    def test_ring_default_is_identity(self, patched):
+        from sbibm_jax.data import TaskDataset
+        ds = TaskDataset("healpix_task")
+        batch_theta, batch_x = next(iter(ds.get_train_loader(2)))
+        assert batch_x.shape == (2, 48, 1)
+        base = np.asarray(batch_x)[0, :, 0]
+        # ring order: row content untouched.
+        assert base[1] - base[0] == 1.0
+
+    def test_nest_applies_reorder(self, patched):
+        import healpy as hp
+        from sbibm_jax.data import TaskDataset
+
+        ds_ring = TaskDataset("healpix_task")
+        ds_nest = TaskDataset("healpix_task", ordering="nest")
+        x_ring = np.asarray(
+            next(iter(ds_ring.get_train_loader(2)))[1]
+        )[..., 0]
+        x_nest = np.asarray(
+            next(iter(ds_nest.get_train_loader(2)))[1]
+        )[..., 0]
+        for r, n in zip(x_ring, x_nest):
+            np.testing.assert_array_equal(
+                n, hp.reorder(r, r2n=True)
+            )
+
+    def test_nest_on_non_healpix_raises(self, patched):
+        from sbibm_jax.data import TaskDataset
+        with pytest.raises(ValueError, match="healpix"):
+            TaskDataset("two_moons", ordering="nest")
+
+    def test_bad_ordering_raises(self, patched):
+        from sbibm_jax.data import TaskDataset
+        with pytest.raises(ValueError, match="ordering"):
+            TaskDataset("healpix_task", ordering="rings")

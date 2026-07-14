@@ -27,13 +27,14 @@ def _stat_array(values, dtype):
 
 def make_collate(
     *, kind, x_kind, theta_kind="vector", normalize=False, stats=None,
-    dtype=np.float32,
+    dtype=np.float32, x_perm=None,
 ):
     """Return a collate fn mapping a {'thetas','xs'} batch to model-ready arrays.
 
     kind="conditional" -> (theta, x); kind="joint" -> concat([theta, x], axis=1).
     Joint is vector-only (both x and theta). `stats` is the metadata stats dict
-    (native-reduced).
+    (native-reduced). `x_perm`, if given, gathers x's second axis (e.g. a
+    healpix ring->nest pixel permutation) before tokenization.
     """
     if kind not in ("joint", "conditional"):
         raise ValueError(f"Unknown kind {kind!r}.")
@@ -51,9 +52,15 @@ def make_collate(
         xm = _stat_array(stats["x_mean"], dtype)
         xs_ = _stat_array(stats["x_std"], dtype)
 
+    if x_perm is not None:
+        x_perm = np.asarray(x_perm)
+
     def collate(batch):
         theta = np.asarray(batch["thetas"], dtype=dtype)[..., None]
-        x = np.asarray(batch["xs"], dtype=dtype)[..., None]
+        x = np.asarray(batch["xs"], dtype=dtype)
+        if x_perm is not None:
+            x = x[:, x_perm]
+        x = x[..., None]
         if normalize:
             theta = (theta - tm) / ts
             x = (x - xm) / xs_
@@ -72,7 +79,7 @@ def _stat_array_jax(values, dtype):
 
 def make_collate_jax(
     *, kind, x_kind, theta_kind="vector", normalize=False, stats=None,
-    dtype=jnp.float32,
+    dtype=jnp.float32, x_perm=None,
 ):
     """jnp twin of make_collate, for the online (main-process) path.
 
@@ -97,9 +104,15 @@ def make_collate_jax(
         xm = _stat_array_jax(stats["x_mean"], dtype)
         xs_ = _stat_array_jax(stats["x_std"], dtype)
 
+    if x_perm is not None:
+        x_perm = jnp.asarray(x_perm)
+
     def collate(batch):
         theta = jnp.asarray(batch["thetas"], dtype=dtype)[..., None]
-        x = jnp.asarray(batch["xs"], dtype=dtype)[..., None]
+        x = jnp.asarray(batch["xs"], dtype=dtype)
+        if x_perm is not None:
+            x = x[:, x_perm]
+        x = x[..., None]
         if normalize:
             theta = (theta - tm) / ts
             x = (x - xm) / xs_
