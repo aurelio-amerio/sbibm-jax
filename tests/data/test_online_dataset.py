@@ -388,3 +388,89 @@ class TestMultiprocessSmokeGRF:
             # grain recommends closing mp_prefetch iterators explicitly.
             if hasattr(it, "close"):
                 it.close()
+
+
+class TestOfflineTaskKwargs:
+    def test_no_hub_access(self, monkeypatch):
+        # Any Hub call must explode -> proves the offline path.
+        import sbibm_jax.data.dataset as ds_mod
+        from sbibm_jax.data import OnlineTaskDataset
+
+        def _boom(**kwargs):
+            raise AssertionError("hub accessed in offline mode")
+
+        monkeypatch.setattr(ds_mod, "hf_hub_download", _boom)
+        ds = OnlineTaskDataset("two_moons", task_kwargs={})
+        theta, x = next(iter(ds.get_online_train_loader(4)))
+        assert theta.shape == (4, 2, 1)
+        assert x.shape == (4, 2, 1)
+
+    def test_spherical_grf_arbitrary_nside(self):
+        from sbibm_jax.data import OnlineTaskDataset
+        ds = OnlineTaskDataset(
+            "spherical_grf", task_kwargs={"nside": 8}
+        )
+        assert ds.x_kind == "healpix"
+        theta, x = next(iter(ds.get_online_train_loader(2)))
+        assert theta.shape == (2, 3, 1)
+        assert x.shape == (2, 768, 1)
+
+    def test_normalize_without_stats_raises(self):
+        from sbibm_jax.data import OnlineTaskDataset
+        with pytest.raises(ValueError, match="stats"):
+            OnlineTaskDataset(
+                "spherical_grf", task_kwargs={"nside": 8},
+                normalize=True,
+            )
+
+    def test_normalize_with_explicit_stats(self):
+        from sbibm_jax.data import OnlineTaskDataset
+        stats = {
+            "theta_mean": [[0.0, 0.0, 0.0]],
+            "theta_std": [[1.0, 1.0, 1.0]],
+            # healpix native x is (n, npix) -- 2-D -- so x_axes=(0, 1)
+            # reduces to rank-2 (1, 1), not the image convention's
+            # rank-3 (1, 1, 1) (native (n, H, W) is 3-D there).
+            "x_mean": [[0.0]],
+            "x_std": [[1.0]],
+        }
+        ds = OnlineTaskDataset(
+            "spherical_grf", task_kwargs={"nside": 8},
+            normalize=True, stats=stats,
+        )
+        theta, x = next(iter(ds.get_online_train_loader(2)))
+        assert x.shape == (2, 768, 1)
+
+    def test_stats_without_task_kwargs_raises(self, patched_meta):
+        from sbibm_jax.data import OnlineTaskDataset
+        with pytest.raises(ValueError, match="task_kwargs"):
+            OnlineTaskDataset("two_moons", stats={"x_mean": [[0.0]]})
+
+    def test_offline_nest_ordering(self):
+        import healpy as hp
+        from sbibm_jax.data import OnlineTaskDataset
+
+        ring = OnlineTaskDataset(
+            "spherical_grf", task_kwargs={"nside": 8}, seed=0
+        )
+        nest = OnlineTaskDataset(
+            "spherical_grf", task_kwargs={"nside": 8}, seed=0,
+            ordering="nest",
+        )
+        x_ring = np.asarray(
+            next(iter(ring.get_online_train_loader(1)))[1]
+        )[0, :, 0]
+        x_nest = np.asarray(
+            next(iter(nest.get_online_train_loader(1)))[1]
+        )[0, :, 0]
+        np.testing.assert_array_equal(
+            x_nest, hp.reorder(x_ring, r2n=True)
+        )
+
+    def test_offline_reference_raises(self):
+        from sbibm_jax.data import OnlineTaskDataset
+        ds = OnlineTaskDataset(
+            "spherical_grf", task_kwargs={"nside": 8}
+        )
+        with pytest.raises(ValueError, match="reference"):
+            ds.get_reference(1)

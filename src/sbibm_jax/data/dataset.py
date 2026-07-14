@@ -320,6 +320,9 @@ class OnlineTaskDataset(TaskDataset):
         normalize=False,
         dtype=jnp.float32,
         seed=42,
+        ordering="ring",
+        task_kwargs=None,
+        stats=None,
     ):
         self.name = name
         self.kind = kind
@@ -327,17 +330,32 @@ class OnlineTaskDataset(TaskDataset):
         self.normalize = normalize
         self.dtype = dtype
         self.seed = seed
+        self.ordering = ordering
 
-        self._init_metadata(self._load_metadata_entry())
+        self.task = get_task(name, **(task_kwargs or {}))
+        if task_kwargs is not None:
+            # Offline mode: shapes from the task itself, no Hub metadata.
+            # Gen-time stats don't exist here; normalize needs explicit
+            # stats.
+            entry = self._entry_from_task(self.task, stats=stats)
+        else:
+            if stats is not None:
+                raise ValueError(
+                    "stats is only accepted together with task_kwargs "
+                    "(offline mode); the Hub metadata provides stats "
+                    "otherwise."
+                )
+            entry = self._load_metadata_entry()
+        self._init_metadata(entry)
         # Replace the numpy collate set by _init_metadata: the online path
         # collates in the main process, after the pickle boundary, so jnp is
         # safe (and saves a host round-trip before the training step).
         self._collate = make_collate_jax(
             kind=kind, x_kind=self.x_kind, theta_kind=self.theta_kind,
             normalize=normalize, stats=self._stats, dtype=dtype,
+            x_perm=self._x_perm,
         )
 
-        self.task = get_task(name)
         # Eager build: tasks without a simulator raise NotImplementedError
         # here, at construction, instead of on the first next().
         self.simulator = self.task.get_simulator(
@@ -351,6 +369,24 @@ class OnlineTaskDataset(TaskDataset):
                 f"OnlineTaskDataset requires vector theta; task {name!r} "
                 f"has theta_kind={self.theta_kind!r}."
             )
+
+    @staticmethod
+    def _entry_from_task(task, *, stats=None):
+        x_kind = getattr(task, "hf_x_kind", "vector")
+        entry = {
+            "x_kind": x_kind,
+            "x_shape": list(getattr(task, "hf_x_shape", (task.dim_x,))),
+            "theta_kind": getattr(task, "hf_theta_kind", "vector"),
+            "theta_shape": list(
+                getattr(task, "hf_theta_shape", (task.dim_theta,))
+            ),
+            "num_observations": int(task.num_observations),
+            "has_reference": False,
+            "stats": stats,
+        }
+        if x_kind == "healpix":
+            entry["nside"] = int(task.nside)
+        return entry
 
     def _offline_error(self):
         return NotImplementedError(
