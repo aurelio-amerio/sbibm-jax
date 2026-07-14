@@ -36,8 +36,8 @@ def _fake_metadata(tmp_path):
             "stats": {
                 "theta_mean": [[0.0, 0.0, 0.0]],
                 "theta_std": [[1.0, 1.0, 1.0]],
-                "x_mean": [[[0.0]]],
-                "x_std": [[[1.0]]],
+                "x_mean": [[0.0]],
+                "x_std": [[1.0]],
                 "theta_axes": [0],
                 "x_axes": [0, 1],
             },

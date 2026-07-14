@@ -11,6 +11,7 @@ benchmark's correctness-check task. Design doc:
 docs/superpowers/specs/2026-07-14-spherical-grf-task-design.md
 """
 
+import warnings
 from pathlib import Path
 from typing import Optional
 
@@ -285,7 +286,7 @@ class SphericalGRF(Task):
         )
         if observation is None:
             observation = self.get_observation(num_observation)
-        samples, _ = sample_reference_posterior(
+        samples, diagnostics = sample_reference_posterior(
             key,
             observation,
             nside=self.nside,
@@ -294,6 +295,13 @@ class SphericalGRF(Task):
             high=self.prior_params["high"],
             num_samples=num_samples,
         )
+        max_rhat = float(np.max(diagnostics["rhat"]))
+        if max_rhat > 1.01:
+            warnings.warn(
+                f"spherical_grf live reference sampling did not tune "
+                f"well (max rhat={max_rhat:.3g} > 1.01); try more "
+                f"num_tuning_steps or a different key."
+            )
         return samples
 
     def unflatten_data(self, data: jnp.ndarray) -> jnp.ndarray:

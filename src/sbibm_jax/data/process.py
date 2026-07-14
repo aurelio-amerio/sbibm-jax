@@ -59,6 +59,10 @@ def make_collate(
         theta = np.asarray(batch["thetas"], dtype=dtype)[..., None]
         x = np.asarray(batch["xs"], dtype=dtype)
         if x_perm is not None:
+            # Safe before normalization only because x stats are
+            # per-feature scalars; per-pixel stats accumulated in RING
+            # order would need the perm applied after normalization
+            # (or the stats permuted too).
             x = x[:, x_perm]
         x = x[..., None]
         if normalize:
@@ -111,6 +115,10 @@ def make_collate_jax(
         theta = jnp.asarray(batch["thetas"], dtype=dtype)[..., None]
         x = jnp.asarray(batch["xs"], dtype=dtype)
         if x_perm is not None:
+            # Safe before normalization only because x stats are
+            # per-feature scalars; per-pixel stats accumulated in RING
+            # order would need the perm applied after normalization
+            # (or the stats permuted too).
             x = x[:, x_perm]
         x = x[..., None]
         if normalize:

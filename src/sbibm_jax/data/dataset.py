@@ -103,8 +103,9 @@ class TaskDataset:
         self._posterior = None  # lazily loaded in get_reference
 
     def _resolve_x_perm(self, entry):
-        # getattr fallback: OnlineTaskDataset only sets self.ordering
-        # from Task 8 on; until then it behaves as "ring".
+        # getattr fallback: defensive default for subclasses that
+        # don't set self.ordering; both TaskDataset and
+        # OnlineTaskDataset always set it themselves.
         ordering = getattr(self, "ordering", "ring")
         if ordering == "ring":
             return None
@@ -116,6 +117,11 @@ class TaskDataset:
             raise ValueError(
                 "ordering='nest' requires a healpix dataset "
                 f"(x_kind={self.x_kind!r})."
+            )
+        if entry.get("ordering", "ring") != "ring":
+            raise ValueError(
+                "only ring-stored healpix datasets are supported; a "
+                "nest-stored dataset would be double-permuted."
             )
         return _healpix_nest_perm(int(entry["nside"]))
 

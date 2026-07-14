@@ -22,6 +22,8 @@ import logging
 import sys
 from pathlib import Path
 
+import jax
+
 from sbibm_jax import get_available_tasks, get_task
 from sbibm_jax.hf import (
     config,
@@ -148,7 +150,16 @@ def main(argv=None):
     stats_by_task = {}
     for name in task_names:
         print(f"Uploading dataset for task: {name}")
-        stats_by_task[name] = upload_dataset(repo, name, **build_opts)
+        # spherical_grf's jax_healpy import (hf_backend="jax") flips
+        # jax_enable_x64 process-wide; snapshot/restore per task so
+        # later tasks in an --all run aren't contaminated with x64.
+        x64_before = jax.config.jax_enable_x64
+        try:
+            stats_by_task[name] = upload_dataset(
+                repo, name, **build_opts
+            )
+        finally:
+            jax.config.update("jax_enable_x64", x64_before)
 
     # Rebuild metadata WITH stats, merge non-destructively, upload once.
     local_meta = make_metadata(
