@@ -47,6 +47,10 @@ loader = [
     "huggingface_hub>=0.24.0",
     "grain>=0.2.15",
 ]
+jaxhp = [
+    "jax-healpy",
+    "s2fft",
+]
 pypesto = [
     "pypesto[amici]>=0.6.0",
     "petab",
@@ -92,6 +96,10 @@ loader = [
     "huggingface_hub>=0.24.0",
     "grain>=0.2.15",
 ]
+jaxhp = [
+    "jax-healpy",
+    "s2fft",
+]
 dev = [
     {include-group = "lint"},
     {include-group = "test"},
@@ -99,6 +107,7 @@ dev = [
     {include-group = "notebooks"},
     {include-group = "hf"},
     {include-group = "loader"},
+    {include-group = "jaxhp"},
 ]
 
 [build-system]

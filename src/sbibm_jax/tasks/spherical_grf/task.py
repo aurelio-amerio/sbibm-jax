@@ -178,7 +178,14 @@ class SphericalGRF(Task):
         self, key: jax.random.PRNGKey, max_calls: Optional[int] = None
     ) -> Simulator:
         if self.backend == "jax":
-            raise NotImplementedError  # Task 3
+            from sbibm_jax.tasks.spherical_grf.jax_backend import (
+                make_jax_simulator,
+            )
+            return Simulator(
+                task=self,
+                simulator=make_jax_simulator(self),
+                max_calls=max_calls,
+            )
         return Simulator(
             task=self,
             simulator=self._healpy_simulator(),

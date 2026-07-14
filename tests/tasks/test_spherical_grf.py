@@ -199,3 +199,102 @@ class TestSpectrumMC:
         ratio = cl_hat[2:] / (cl_true[2:] + nl)
         assert np.max(np.abs(ratio - 1.0)) < 0.2
         assert np.mean(np.abs(ratio - 1.0)) < 0.03
+
+
+def _has_jax_healpy() -> bool:
+    try:
+        import jax_healpy  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+class TestJaxBackendGuard:
+    def test_missing_extra_raises_informative(self, monkeypatch):
+        import sys
+
+        # A None entry in sys.modules makes `import jax_healpy` raise
+        # ImportError even when the package is installed.
+        monkeypatch.setitem(sys.modules, "jax_healpy", None)
+        task = SphericalGRF(nside=8, backend="jax")
+        with pytest.raises(ImportError, match=r"\[jaxhp\]"):
+            task.get_simulator(jax.random.PRNGKey(0))
+
+
+@pytest.mark.skipif(
+    not _has_jax_healpy(), reason="[jaxhp] extra not installed"
+)
+class TestJaxSimulator:
+    def test_shapes_and_dtype(self):
+        task = SphericalGRF(nside=8, backend="jax")
+        key = jax.random.PRNGKey(0)
+        sim = task.get_simulator(key)
+        theta = task.get_prior(key, num_samples=3)
+        x = sim(key, theta)
+        assert x.shape == (3, task.npix)
+        assert x.dtype == jnp.float32
+        assert bool(jnp.all(jnp.isfinite(x)))
+
+    def test_deterministic_given_key(self):
+        task = SphericalGRF(nside=8, backend="jax")
+        key = jax.random.PRNGKey(5)
+        theta = task.get_prior(key, num_samples=2)
+        x1 = task.get_simulator(key)(key, theta)
+        x2 = task.get_simulator(key)(key, theta)
+        np.testing.assert_array_equal(np.asarray(x1), np.asarray(x2))
+
+    def test_synalm_variance(self):
+        # Mean |alm|^2 over many draws approximates Cl.
+        from sbibm_jax.tasks.spherical_grf.jax_backend import (
+            _alm_index_arrays, synalm,
+        )
+
+        lmax = 23
+        cl = np.asarray(cl_target(jnp.array([0.0, -1.0, 0.0]), lmax))
+        l_arr, m_arr = _alm_index_arrays(lmax)
+        keys = jax.random.split(jax.random.PRNGKey(0), 500)
+        alms = np.stack([
+            np.asarray(synalm(k, jnp.asarray(cl), jnp.asarray(l_arr),
+                              jnp.asarray(m_arr)))
+            for k in keys
+        ])
+        est = np.mean(np.abs(alms) ** 2, axis=0)
+        sel = l_arr >= 2
+        ratio = est[sel] / cl[l_arr[sel]]
+        assert np.abs(np.mean(ratio) - 1.0) < 0.05
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(
+    not _has_jax_healpy(), reason="[jaxhp] extra not installed"
+)
+class TestBackendParity:
+    def test_mean_spectra_agree(self):
+        import healpy as hp
+
+        nside, n_maps = 32, 200
+        theta_row = jnp.array([0.0, -1.0, 0.1])
+        theta = jnp.tile(theta_row[None, :], (n_maps, 1))
+        key = jax.random.PRNGKey(0)
+
+        def mean_spectrum(task):
+            x = np.asarray(
+                task.get_simulator(key)(key, theta), dtype=np.float64
+            )
+            return np.mean(
+                [hp.anafast(m, lmax=task.lmax) for m in x], axis=0
+            )
+
+        cl_hp = mean_spectrum(SphericalGRF(nside=nside))
+        cl_jx = mean_spectrum(SphericalGRF(nside=nside, backend="jax"))
+        cl_true = np.asarray(cl_target(theta_row, 3 * nside - 1))
+
+        # Each backend against the analytic truth...
+        for cl_hat in (cl_hp, cl_jx):
+            ratio = cl_hat[2:] / cl_true[2:]
+            assert np.max(np.abs(ratio - 1.0)) < 0.2
+            assert np.mean(np.abs(ratio - 1.0)) < 0.03
+        # ...and against each other (independent MC noise, ~sqrt(2)x).
+        ratio = cl_jx[2:] / cl_hp[2:]
+        assert np.max(np.abs(ratio - 1.0)) < 0.3
+        assert np.mean(np.abs(ratio - 1.0)) < 0.05

@@ -1490,6 +1490,19 @@ wheels = [
 ]
 
 [[package]]
+name = "jax-healpy"
+version = "0.6"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "jax" },
+    { name = "jaxtyping" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ca/42/0a7da88cceb4bc1cbab9f9b22fd068fa7d5fdb4dd4afdd2e1c58c0039fce/jax_healpy-0.6.tar.gz", hash = "sha256:a3f305a5001058a397af5ca830d7057a8ae435b7b5d11cc800b486775f67849c", size = 201756, upload-time = "2026-01-28T10:54:32.804Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/47/0f/5ed4efe8515c6e538d7a4214b87adaf2ef3bedb82f4ed16a67ea744c5f10/jax_healpy-0.6-py3-none-any.whl", hash = "sha256:e73230d9822b36051c6c9bd7641054a12b820077cc28c96bd67b956613d7abee", size = 73719, upload-time = "2026-01-28T10:54:31.206Z" },
+]
+
+[[package]]
 name = "jaxlib"
 version = "0.9.1"
 source = { registry = "https://pypi.org/simple" }
@@ -3587,6 +3600,22 @@ wheels = [
 ]
 
 [[package]]
+name = "s2fft"
+version = "1.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "jax" },
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/02/60/ac5914b6a5fce9df03d4c74eeeda9338c83eb3468fd856a08ea998b7656f/s2fft-1.4.0.tar.gz", hash = "sha256:b84c0c2bb0c3dfabe3431360bf90224705554e92966ab87e92affc0fe8f956ba", size = 22770481, upload-time = "2026-02-12T11:11:49.532Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0d/1f/39fc6e6f69a0c1f7de40f2defaa1ef80de33c66814b98506d850f18b0c18/s2fft-1.4.0-cp312-abi3-macosx_11_0_arm64.whl", hash = "sha256:c5f984316b81fdfdcaffcfdcb2ba9bdf70b2c25d3ef23313f8123d360f566833", size = 129376, upload-time = "2026-02-12T11:11:40.906Z" },
+    { url = "https://files.pythonhosted.org/packages/bb/74/7ec92e611283b1a559a0b2e535621985b66c6c48128207887a999448e472/s2fft-1.4.0-cp312-abi3-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:60ef04398dc4481232609a11d7ba4e0a9fbe3b311bbbab5a600f058dbaa7e61c", size = 137534, upload-time = "2026-02-12T11:11:42.84Z" },
+    { url = "https://files.pythonhosted.org/packages/53/10/89793a12ecda9473651c4e8f395e9601fae02081e1f18e9b4af8c9035d85/s2fft-1.4.0-cp314-cp314t-macosx_11_0_arm64.whl", hash = "sha256:647edd6533035283e38567b8200937064e4e1fda3bad68f43c5c3259732816db", size = 130318, upload-time = "2026-02-12T11:11:45.132Z" },
+    { url = "https://files.pythonhosted.org/packages/2c/b6/77f99f38bb0f09bf85f7b3667015941d003ecd880060955c1f6ea9edeef6/s2fft-1.4.0-cp314-cp314t-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:9ac7d4cee989d1e5d5724ec4bfd8259bade430c30bf916e5955548b541ba0b73", size = 138646, upload-time = "2026-02-12T11:11:47.24Z" },
+]
+
+[[package]]
 name = "sbibm-jax"
 version = "0.1.2"
 source = { editable = "." }
@@ -3605,6 +3634,10 @@ dependencies = [
 hf = [
     { name = "datasets" },
     { name = "huggingface-hub" },
+]
+jaxhp = [
+    { name = "jax-healpy" },
+    { name = "s2fft" },
 ]
 loader = [
     { name = "datasets" },
@@ -3627,6 +3660,7 @@ dev = [
     { name = "genbadge", extra = ["all"] },
     { name = "grain" },
     { name = "huggingface-hub" },
+    { name = "jax-healpy" },
     { name = "junitparser" },
     { name = "notebook" },
     { name = "pyro-ppl" },
@@ -3635,12 +3669,17 @@ dev = [
     { name = "pytest-env" },
     { name = "pytest-mock" },
     { name = "pytest-xdist" },
+    { name = "s2fft" },
     { name = "torch", version = "2.10.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
     { name = "torch", version = "2.10.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
 ]
 hf = [
     { name = "datasets" },
     { name = "huggingface-hub" },
+]
+jaxhp = [
+    { name = "jax-healpy" },
+    { name = "s2fft" },
 ]
 lint = [
     { name = "flake8" },
@@ -3680,6 +3719,7 @@ requires-dist = [
     { name = "huggingface-hub", marker = "extra == 'hf'", specifier = ">=0.24.0" },
     { name = "huggingface-hub", marker = "extra == 'loader'", specifier = ">=0.24.0" },
     { name = "jax", specifier = ">=0.9.1" },
+    { name = "jax-healpy", marker = "extra == 'jaxhp'" },
     { name = "joblib", marker = "extra == 'pypesto'" },
     { name = "matplotlib", specifier = ">=3.10.8" },
     { name = "numpy", specifier = ">=2.3.5" },
@@ -3688,9 +3728,10 @@ requires-dist = [
     { name = "pandas", marker = "extra == 'pypesto'", specifier = "<3.0" },
     { name = "petab", marker = "extra == 'pypesto'" },
     { name = "pypesto", extras = ["amici"], marker = "extra == 'pypesto'", specifier = ">=0.6.0" },
+    { name = "s2fft", marker = "extra == 'jaxhp'" },
     { name = "scipy", marker = "extra == 'pypesto'" },
 ]
-provides-extras = ["hf", "loader", "pypesto"]
+provides-extras = ["hf", "loader", "jaxhp", "pypesto"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -3699,6 +3740,7 @@ dev = [
     { name = "genbadge", extras = ["all"] },
     { name = "grain", specifier = ">=0.2.15" },
     { name = "huggingface-hub", specifier = ">=0.24.0" },
+    { name = "jax-healpy" },
     { name = "junitparser" },
     { name = "notebook", specifier = ">=7.5.4" },
     { name = "pyro-ppl", specifier = ">=1.9.1" },
@@ -3707,11 +3749,16 @@ dev = [
     { name = "pytest-env" },
     { name = "pytest-mock" },
     { name = "pytest-xdist" },
+    { name = "s2fft" },
     { name = "torch", specifier = ">=2.9.1", index = "https://download.pytorch.org/whl/cpu" },
 ]
 hf = [
     { name = "datasets", specifier = ">=2.20.0" },
     { name = "huggingface-hub", specifier = ">=0.24.0" },
+]
+jaxhp = [
+    { name = "jax-healpy" },
+    { name = "s2fft" },
 ]
 lint = [{ name = "flake8" }]
 loader = [
