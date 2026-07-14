@@ -27,7 +27,9 @@ classifiers = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "blackjax>=1.6",
     "diffrax>=0.7.2",
+    "healpy>=1.19.0",
     "jax>=0.9.1",
     "matplotlib>=3.10.8",
     "numpy>=2.3.5",
