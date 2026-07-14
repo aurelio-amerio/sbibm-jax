@@ -27,7 +27,7 @@ def make_metadata(
     so the recorded ``splits`` always match what the uploaded dataset contains.
 
     Schema per task:
-        x_kind:         "vector" | "image" | "timeseries"
+        x_kind:         "vector" | "image" | "timeseries" | "healpix"
         x_shape:        list[int]
         theta_kind:     "vector" | "image" | "timeseries"
         theta_shape:    list[int]

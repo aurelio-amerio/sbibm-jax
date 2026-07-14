@@ -4,7 +4,9 @@ import pytest
 
 from sbibm_jax import get_task
 from sbibm_jax.hf import config
-from sbibm_jax.hf.exporter import HealpixExporter, ImageExporter, VectorExporter
+from sbibm_jax.hf.exporter import (
+    HealpixExporter, ImageExporter, VectorExporter,
+)
 from sbibm_jax.hf.registry import X_KIND_REGISTRY, get_exporter
 
 

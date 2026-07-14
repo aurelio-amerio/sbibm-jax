@@ -33,7 +33,8 @@ def get_exporter(
     """Build the exporter for `task`, honouring its hf_* hint attributes.
 
     Hint attributes (all optional, read via getattr with safe defaults):
-        hf_x_kind:           "vector" | "image" | "timeseries" (default "vector")
+        hf_x_kind:           "vector" | "image" | "timeseries" |
+                             "healpix" (default "vector")
         hf_x_shape:          tuple[int, ...]  (default (task.dim_x,))
         hf_theta_kind:       "vector"         (default "vector")
         hf_theta_shape:      tuple[int, ...]  (default (task.dim_theta,))
