@@ -43,6 +43,24 @@ def cl_target(
     return cl.at[:2].set(0.0)
 
 
+def _cl_target_np(
+    theta: np.ndarray, lmax: int, ell0: float = 64.0
+) -> np.ndarray:
+    """float64 NumPy twin of cl_target for the healpy simulate path.
+
+    Computed outside JAX so the result (and hence the seed-derived
+    canonical observations) is independent of the global
+    jax_enable_x64 flag, which e.g. importing jax_healpy flips.
+    """
+    theta = np.asarray(theta, dtype=np.float64)
+    log_a, n, alpha = theta[0], theta[1], theta[2]
+    ell = np.arange(lmax + 1)
+    x = np.log(np.maximum(ell, 1) / ell0)
+    cl = np.exp(log_a + n * x + 0.5 * alpha * x**2)
+    cl[:2] = 0.0
+    return cl
+
+
 class SphericalGRF(Task):
     def __init__(
         self,
@@ -139,10 +157,7 @@ class SphericalGRF(Task):
     def _simulate_one_np(self, subkey, theta_np: np.ndarray) -> np.ndarray:
         """One RING map (npix,) float32 via healpy, seeded from subkey."""
         words = self._seed_words(subkey)
-        cl = np.asarray(
-            cl_target(jnp.asarray(theta_np), self.lmax, self.ell0),
-            dtype=np.float64,
-        )
+        cl = _cl_target_np(theta_np, self.lmax, self.ell0)
         # healpy's synfast draws from NumPy's *global* RNG (no rng arg),
         # so seed it per row. Not thread-safe; consumers use process
         # workers (grain spawn), never threads.
@@ -199,11 +214,19 @@ class SphericalGRF(Task):
         """Seed-derived (theta_o (1,3), observation (1,npix)).
 
         Always uses the healpy backend so observed maps are identical
-        whatever self.backend is.
+        whatever self.backend is. theta_o is drawn with an explicit
+        float32 jax.random.uniform (bit-identical to the numpyro prior
+        sample under default x32) so the result does not depend on the
+        global jax_enable_x64 flag (which importing jax_healpy flips).
         """
         seed = self.observation_seeds[num_observation - 1]
         key_theta, key_sim = jax.random.split(jax.random.PRNGKey(seed))
-        theta_o = self.get_prior(key_theta, num_samples=1)
+        low = jnp.asarray(self.prior_params["low"], dtype=jnp.float32)
+        high = jnp.asarray(self.prior_params["high"], dtype=jnp.float32)
+        theta_o = jax.random.uniform(
+            key_theta, (1, 3), minval=low, maxval=high,
+            dtype=jnp.float32,
+        )
         obs = self._healpy_simulator()(key_sim, theta_o)
         return theta_o, obs
 
