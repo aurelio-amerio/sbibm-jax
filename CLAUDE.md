@@ -63,6 +63,14 @@ local `metadata.json` is deleted after a successful real upload.
 Pass `--chunk-size N` to shrink the per-chunk generation batch if a GPU OOMs
 on large image tasks (e.g. `gaussian_random_field_256`).
 
+The `spherical_grf` task's `backend="jax"` (and its HF generation, via
+`hf_backend="jax"`) needs the optional `[jaxhp]` extra (`jax-healpy`,
+`s2fft`): `uv sync --extra jaxhp` (also a dependency group, so
+`uv sync --all-groups` pulls it in). The default healpy backend needs
+nothing extra. Canonical observations/references are regenerated with
+`uv run python scripts/generate_spherical_grf_reference.py` (refuses to
+write if MCLMC split-rhat > 1.01).
+
 ## Architecture
 
 **Task abstraction.** `src/sbibm_jax/tasks/task.py` defines the abstract `Task`
@@ -105,6 +113,21 @@ files by `scripts/convert_torch_to_npz.py`.
 function + `diffeqsolve` with `Tsit5`/`PIDController`, `jax.vmap`ed over the
 parameter batch. They may produce NaNs for divergent parameters; simulators
 propagate NaN rows rather than failing.
+
+**Spherical GRF task** (`spherical_grf`, alias `spherical_grf_128`) is a
+HEALPix Gaussian random field with a log-log polynomial angular power
+spectrum, theta = (logA, n, alpha), optional Gaussian pixel noise
+(`noise_std` ctor arg, folded into the reference likelihood as N_ell),
+and two simulator backends behind one seam: healpy/NumPy (default;
+ground truth — observations always use it) and jax-healpy (`[jaxhp]`
+extra; jit/GPU, used for HF generation via the `hf_backend="jax"` hint
+honored in `hf.build`). Reference posteriors are exact (anafast +
+Gaussian spectrum likelihood, blackjax adjusted MCLMC in
+`reference_posterior.py`); canonical noiseless nside 64/128 configs ship
+per-config `.npz` observations/references under `files/nside_<n>/`,
+other configs generate observations seed-derived on the fly and sample
+references live. Maps are RING-ordered; `hf_x_kind="healpix"` stores
+flat `(npix,)` rows and writes `nside`/`ordering` into `metadata.json`.
 
 **HuggingFace export (`src/sbibm_jax/hf/`).** Optional subpackage, gated by the
 `[hf]` extra with an import-guard that mirrors the `pypesto` pattern (informative
@@ -168,6 +191,12 @@ config (raising when the task ships no reference). Graph/causal masks are
 `get_condition_mask_fn`) — the core loader never imports it, and base/edge masks
 cover only the 5 analytical base tasks (`two_moons`, `gaussian_linear`,
 `gaussian_linear_uniform`, `gaussian_mixture`, `slcp`).
+Loaders accept `ordering="ring"|"nest"` (healpix datasets only; a
+precomputed ring-to-nest permutation is applied in the collate).
+`OnlineTaskDataset(name, task_kwargs={...}, stats=None)` is the offline
+mode: the task is built directly (e.g. `{"nside": 256, "backend":
+"jax"}`), Hub metadata is skipped, shapes come from the task's `hf_*`
+attributes, and `normalize=True` requires explicit `stats`.
 
 ### Conventions
 
