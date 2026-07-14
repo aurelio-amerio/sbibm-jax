@@ -388,3 +388,32 @@ class TestReferencePosteriorSmoke:
         assert np.all(truth >= lo) and np.all(truth <= hi)
         # Posterior should be a lot tighter than the prior box on logA.
         assert np.std(s[:, 0]) < 0.4
+
+
+class TestCanonicalFiles:
+    @pytest.mark.parametrize("task_name", ["spherical_grf"])
+    def test_shipped_observations_match_generation(self, task_name):
+        task = get_task(task_name)
+        npz = task.path / "files" / f"nside_{task.nside}"
+        if not (npz / "observations.npz").exists():
+            pytest.skip("canonical npz not generated yet")
+        for n in (1, 5, 10):
+            theta_gen, obs_gen = task._generate_observation(n)
+            np.testing.assert_array_equal(
+                np.asarray(task.get_observation(n)), np.asarray(obs_gen)
+            )
+            np.testing.assert_array_equal(
+                np.asarray(task.get_true_parameters(n)),
+                np.asarray(theta_gen),
+            )
+
+    @pytest.mark.parametrize("task_name", ["spherical_grf"])
+    def test_shipped_reference_shape_and_support(self, task_name):
+        task = get_task(task_name)
+        npz = task.path / "files" / f"nside_{task.nside}"
+        if not (npz / "reference_posterior_samples.npz").exists():
+            pytest.skip("canonical npz not generated yet")
+        s = np.asarray(task.get_reference_posterior_samples(1))
+        assert s.shape == (10000, 3)
+        assert np.all(s >= np.asarray(task.prior_params["low"]))
+        assert np.all(s <= np.asarray(task.prior_params["high"]))
