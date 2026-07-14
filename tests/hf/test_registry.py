@@ -4,13 +4,15 @@ import pytest
 
 from sbibm_jax import get_task
 from sbibm_jax.hf import config
-from sbibm_jax.hf.exporter import ImageExporter, VectorExporter
+from sbibm_jax.hf.exporter import HealpixExporter, ImageExporter, VectorExporter
 from sbibm_jax.hf.registry import X_KIND_REGISTRY, get_exporter
 
 
 class TestRegistry:
     def test_known_kinds(self):
-        assert set(X_KIND_REGISTRY) == {"vector", "image", "timeseries"}
+        assert set(X_KIND_REGISTRY) == {
+            "vector", "image", "timeseries", "healpix",
+        }
 
     def test_default_is_vector(self):
         task = get_task("gaussian_linear")
@@ -95,6 +97,12 @@ class TestRegistryRealTasks:
         assert exp.train_size == 100_000
         assert exp.val_size == 10_000
         assert exp.test_size == 10_000
+
+    def test_spherical_grf_dispatches_healpix(self):
+        exp = get_exporter(get_task("spherical_grf"))
+        assert isinstance(exp, HealpixExporter)
+        assert exp.x_shape == (49152,)
+        assert exp.train_size == 100_000
 
 
 class TestResampleHints:

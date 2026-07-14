@@ -68,6 +68,15 @@ class TestMakeMetadata:
             "train": 100_000, "validation": 10_000, "test": 10_000,
         }
 
+    def test_healpix_block_has_nside_and_ordering(self):
+        meta = make_metadata(["spherical_grf"])
+        block = meta["spherical_grf"]
+        assert block["x_kind"] == "healpix"
+        assert block["x_shape"] == [49152]
+        assert block["nside"] == 64
+        assert block["ordering"] == "ring"
+        assert block["has_reference"] is True
+
     def test_writes_json_file(self, tmp_path):
         out = tmp_path / "metadata.json"
         meta = make_metadata(["gaussian_linear"], output_path=out)

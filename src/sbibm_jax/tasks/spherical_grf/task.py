@@ -122,6 +122,7 @@ class SphericalGRF(Task):
         self.hf_x_kind = "healpix"
         self.hf_x_shape = (self.npix,)
         self.hf_stats_axes = {"theta": (0,), "x": (0, 1)}
+        self.hf_backend = "jax"
         if nside <= 64:
             self.hf_split_sizes = {
                 "train": 100_000, "validation": 10_000, "test": 10_000,

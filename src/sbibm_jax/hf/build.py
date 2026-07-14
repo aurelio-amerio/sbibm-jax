@@ -76,6 +76,14 @@ def build_dataset(
     iterating the materialized train split (cache-independent).
     """
     task = get_task(task_name, **(task_kwargs or {}))
+    # Generation-backend hint (e.g. spherical_grf generates on the
+    # jax-healpy backend). Applied by mutating task.backend, which
+    # get_simulator reads per call. If the backend's optional extra is
+    # missing, the task's informative ImportError propagates at
+    # generation time — deliberately no silent fallback.
+    hf_backend = getattr(task, "hf_backend", None)
+    if hf_backend is not None:
+        task.backend = hf_backend
     exporter = get_exporter(
         task,
         train_size=train_size,

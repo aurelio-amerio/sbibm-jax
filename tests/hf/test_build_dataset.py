@@ -100,3 +100,47 @@ class TestImageStatsShape:
         )
         # x native shape is (H, W); global-scalar reduction -> (1, 1, 1).
         assert np.array(bundle["stats"]["x_mean"]).shape == (1, 1, 1)
+
+
+def test_hf_backend_is_applied(monkeypatch):
+    from sbibm_jax.hf import build as build_mod
+
+    class _BackendTask:
+        name = "backend_probe"
+        dim_theta = 2
+        dim_x = 3
+        num_observations = 1
+        hf_backend = "special"
+        backend = "default"
+
+        def get_prior(self, key, num_samples=1):
+            import jax.numpy as jnp
+            return jnp.zeros((num_samples, 2))
+
+        def get_simulator(self, key, max_calls=None):
+            assert self.backend == "special"
+            import jax.numpy as jnp
+
+            def sim(k, theta):
+                return jnp.zeros((theta.shape[0], 3))
+
+            sim.flatten_data = lambda x: x.reshape(-1, 3)
+            return sim
+
+        def get_observation(self, i):
+            raise FileNotFoundError
+
+        def get_reference_posterior_samples(self, i):
+            raise FileNotFoundError
+
+        def get_true_parameters(self, i):
+            raise FileNotFoundError
+
+    monkeypatch.setattr(
+        build_mod, "get_task", lambda name, **kw: _BackendTask()
+    )
+    bundle = build_mod.build_dataset(
+        "backend_probe", train_size=4, val_size=2, test_size=2,
+        chunk_size=4,
+    )
+    assert len(bundle["train"]) == 4

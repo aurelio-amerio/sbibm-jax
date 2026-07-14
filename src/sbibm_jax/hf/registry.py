@@ -5,6 +5,7 @@ from typing import Type
 from sbibm_jax.hf import config
 from sbibm_jax.hf.exporter import (
     DatasetExporter,
+    HealpixExporter,
     ImageExporter,
     TimeSeriesExporter,
     VectorExporter,
@@ -15,6 +16,7 @@ X_KIND_REGISTRY: dict[str, Type[DatasetExporter]] = {
     "vector": VectorExporter,
     "image": ImageExporter,
     "timeseries": TimeSeriesExporter,
+    "healpix": HealpixExporter,
 }
 
 

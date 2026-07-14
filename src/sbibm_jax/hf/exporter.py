@@ -75,6 +75,10 @@ class DatasetExporter(ABC):
     def features(self) -> Features:
         return Features({"xs": self.x_feature(), "thetas": self.theta_feature()})
 
+    def extra_metadata(self) -> dict:
+        """Extra per-task metadata.json keys (kind-specific)."""
+        return {}
+
 
 class VectorExporter(DatasetExporter):
     """Flat parameter-vector storage. The default for analytical tasks."""
@@ -126,3 +130,40 @@ class TimeSeriesExporter(DatasetExporter):
     def shape_x(self, x_flat: np.ndarray) -> np.ndarray:
         t, c = self.x_shape
         return np.asarray(x_flat, dtype=self.dtype).reshape(-1, t, c)
+
+
+class HealpixExporter(DatasetExporter):
+    """HEALPix-map x: flat (npix,) RING-ordered float32 rows.
+
+    Storage matches VectorExporter; the metadata block additionally
+    records nside and ordering so map-aware consumers can reorder.
+    """
+
+    x_kind = "healpix"
+
+    def __init__(self, task: Task, *, x_shape: Tuple[int, ...], **kwargs):
+        if len(x_shape) != 1:
+            raise ValueError(
+                f"HealpixExporter requires a 1-D x_shape (npix,), "
+                f"got {x_shape}."
+            )
+        npix = int(x_shape[0])
+        nside = int(round((npix / 12) ** 0.5))
+        if 12 * nside * nside != npix:
+            raise ValueError(
+                f"x_shape {x_shape} is not a valid HEALPix npix "
+                f"(expected 12*nside**2)."
+            )
+        super().__init__(task, x_shape=tuple(x_shape), **kwargs)
+        self.nside = nside
+
+    def x_feature(self):
+        return List(Value("float32"))
+
+    def shape_x(self, x_flat: np.ndarray) -> np.ndarray:
+        return np.asarray(x_flat, dtype=self.dtype).reshape(
+            -1, self.x_shape[0]
+        )
+
+    def extra_metadata(self) -> dict:
+        return {"nside": self.nside, "ordering": "ring"}

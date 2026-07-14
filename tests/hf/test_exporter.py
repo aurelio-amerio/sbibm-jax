@@ -7,6 +7,7 @@ from datasets import Array2D, Features, List, Value
 from sbibm_jax import get_task
 from sbibm_jax.hf.exporter import (
     DatasetExporter,
+    HealpixExporter,
     ImageExporter,
     TimeSeriesExporter,
     VectorExporter,
@@ -121,3 +122,41 @@ class TestTimeSeriesExporter:
             TimeSeriesExporter(
                 task, x_shape=(5,), train_size=4, val_size=2, test_size=2,
             )
+
+
+class TestHealpixExporter:
+    def _task(self):
+        return get_task("spherical_grf")
+
+    def test_schema_and_kind(self):
+        exp = HealpixExporter(
+            self._task(), x_shape=(49152,),
+            train_size=4, val_size=2, test_size=2,
+        )
+        assert exp.x_kind == "healpix"
+        assert exp.nside == 64
+        feats = exp.features()
+        assert isinstance(feats["xs"], List)
+        assert feats["xs"].feature == Value("float32")
+
+    def test_shape_x_flat(self):
+        exp = HealpixExporter(
+            self._task(), x_shape=(49152,),
+            train_size=4, val_size=2, test_size=2,
+        )
+        x = np.zeros((2 * 49152,), dtype=np.float32)
+        assert exp.shape_x(x).shape == (2, 49152)
+
+    def test_rejects_bad_npix(self):
+        with pytest.raises(ValueError, match="HEALPix"):
+            HealpixExporter(
+                self._task(), x_shape=(1000,),
+                train_size=4, val_size=2, test_size=2,
+            )
+
+    def test_extra_metadata(self):
+        exp = HealpixExporter(
+            self._task(), x_shape=(49152,),
+            train_size=4, val_size=2, test_size=2,
+        )
+        assert exp.extra_metadata() == {"nside": 64, "ordering": "ring"}

@@ -59,6 +59,7 @@ def make_metadata(
             "has_reference": load_reference(task, exporter) is not None,
             "num_observations": int(task.num_observations),
             "stats": (stats_by_task or {}).get(name),
+            **exporter.extra_metadata(),
         }
 
     if output_path is not None:
