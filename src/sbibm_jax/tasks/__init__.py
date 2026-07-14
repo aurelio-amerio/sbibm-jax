@@ -91,6 +91,23 @@ def get_task(task_name: str, *args: Any, **kwargs: Any) -> Task:
         from sbibm_jax.tasks.gravitational_waves.task import GravitationalWaves
         return GravitationalWaves(*args, **kwargs)
 
+    elif task_name == "spherical_grf":
+        from sbibm_jax.tasks.spherical_grf.task import SphericalGRF
+        return SphericalGRF(*args, **kwargs)
+
+    elif task_name == "spherical_grf_128":
+        # Shares spherical_grf's directory; per-config files live under
+        # files/nside_<n>/ so the alias resolves its own observations
+        # and references (unlike the gaussian_random_field_256 alias).
+        from sbibm_jax.tasks.spherical_grf.task import SphericalGRF
+        return SphericalGRF(
+            *args,
+            nside=128,
+            name="spherical_grf_128",
+            name_display="Spherical GRF 128",
+            **kwargs,
+        )
+
     else:
         raise NotImplementedError(f"Task '{task_name}' not found.")
 
@@ -111,5 +128,6 @@ def get_available_tasks() -> List[str]:
         "slcp_distractors",
         "bernoulli_glm_raw",
         "gaussian_random_field_256",
+        "spherical_grf_128",
     ]
     return sorted(tasks + tasks_extra)
