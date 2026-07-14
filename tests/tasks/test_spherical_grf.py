@@ -8,6 +8,7 @@ import pytest
 from sbibm_jax import get_available_tasks, get_task
 from sbibm_jax.tasks.simulator import SimulationBudgetExceeded
 from sbibm_jax.tasks.spherical_grf.task import SphericalGRF, cl_target
+from sbibm_jax.tasks.spherical_grf import reference_posterior as refpost
 
 
 class TestClTarget:
@@ -298,3 +299,92 @@ class TestBackendParity:
         ratio = cl_jx[2:] / cl_hp[2:]
         assert np.max(np.abs(ratio - 1.0)) < 0.3
         assert np.mean(np.abs(ratio - 1.0)) < 0.05
+
+
+class TestLogDensity:
+    def _make(self, nside=8, noise_std=0.0):
+        task = SphericalGRF(nside=nside, noise_std=noise_std)
+        theta_o, obs = task._generate_observation(1)
+        cl_hat = refpost.compute_cl_hat(obs, task.lmax)
+        logdens = refpost.make_logdensity(
+            cl_hat, task.noise_std, task.npix, task.lmax, task.ell0,
+            task.prior_params["low"], task.prior_params["high"],
+        )
+        return task, theta_o, logdens
+
+    def test_finite_and_differentiable(self):
+        _, _, logdens = self._make()
+        z = jnp.zeros(3)
+        val = logdens(z)
+        grad = jax.grad(logdens)(z)
+        assert bool(jnp.isfinite(val))
+        assert bool(jnp.all(jnp.isfinite(grad)))
+
+    def test_finite_with_noise(self):
+        _, _, logdens = self._make(noise_std=1.0)
+        assert bool(jnp.isfinite(logdens(jnp.array([0.5, -0.5, 1.0]))))
+
+    def test_higher_at_truth_than_far_away(self):
+        task, theta_o, logdens = self._make()
+        low = task.prior_params["low"]
+        high = task.prior_params["high"]
+        u = (theta_o[0] - low) / (high - low)
+        z_true = jnp.log(u) - jnp.log1p(-u)  # logit
+        z_far = jnp.array([6.0, -6.0, 6.0])  # extreme box corner
+        assert float(logdens(z_true)) > float(logdens(z_far))
+
+
+class TestObservationGeneration:
+    def test_deterministic_and_shaped(self):
+        task = SphericalGRF(nside=8)
+        t1, o1 = task._generate_observation(3)
+        t2, o2 = task._generate_observation(3)
+        assert t1.shape == (1, 3) and o1.shape == (1, task.npix)
+        np.testing.assert_array_equal(np.asarray(o1), np.asarray(o2))
+
+    def test_distinct_observations(self):
+        task = SphericalGRF(nside=8)
+        _, o1 = task._generate_observation(1)
+        _, o2 = task._generate_observation(2)
+        assert not np.allclose(np.asarray(o1), np.asarray(o2))
+
+    def test_backend_independent(self):
+        t_hp, o_hp = SphericalGRF(nside=8)._generate_observation(1)
+        t_jx, o_jx = SphericalGRF(
+            nside=8, backend="jax"
+        )._generate_observation(1)
+        np.testing.assert_array_equal(np.asarray(o_hp), np.asarray(o_jx))
+        np.testing.assert_array_equal(np.asarray(t_hp), np.asarray(t_jx))
+
+    def test_get_observation_noncanonical_falls_back(self):
+        # nside=8 is not a canonical config -> seed-derived generation.
+        task = SphericalGRF(nside=8)
+        obs = task.get_observation(1)
+        theta = task.get_true_parameters(1)
+        assert obs.shape == (1, task.npix)
+        assert theta.shape == (1, 3)
+
+    def test_reference_samples_noncanonical_raises(self):
+        task = SphericalGRF(nside=8)
+        with pytest.raises(
+            FileNotFoundError, match="_sample_reference_posterior"
+        ):
+            task.get_reference_posterior_samples(1)
+
+
+@pytest.mark.slow
+class TestReferencePosteriorSmoke:
+    def test_truth_within_credible_box(self):
+        task = SphericalGRF(nside=16)
+        theta_o, _ = task._generate_observation(1)
+        samples = task._sample_reference_posterior(
+            jax.random.PRNGKey(0), num_samples=2000, num_observation=1
+        )
+        assert samples.shape == (2000, 3)
+        s = np.asarray(samples)
+        truth = np.asarray(theta_o)[0]
+        lo = np.quantile(s, 0.005, axis=0)
+        hi = np.quantile(s, 0.995, axis=0)
+        assert np.all(truth >= lo) and np.all(truth <= hi)
+        # Posterior should be a lot tighter than the prior box on logA.
+        assert np.std(s[:, 0]) < 0.4

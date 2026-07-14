@@ -192,6 +192,60 @@ class SphericalGRF(Task):
             max_calls=max_calls,
         )
 
+    def _config_files_dir(self) -> Path:
+        return self.path / "files" / f"nside_{self.nside}"
+
+    def _generate_observation(self, num_observation: int):
+        """Seed-derived (theta_o (1,3), observation (1,npix)).
+
+        Always uses the healpy backend so observed maps are identical
+        whatever self.backend is.
+        """
+        seed = self.observation_seeds[num_observation - 1]
+        key_theta, key_sim = jax.random.split(jax.random.PRNGKey(seed))
+        theta_o = self.get_prior(key_theta, num_samples=1)
+        obs = self._healpy_simulator()(key_sim, theta_o)
+        return theta_o, obs
+
+    def _load_canonical(self, filename: str):
+        """np.load handle for a canonical-config file, else None."""
+        path = self._config_files_dir() / filename
+        if self.noise_std == 0.0 and path.exists():
+            return np.load(path)
+        return None
+
+    def get_observation(self, num_observation: int) -> jnp.ndarray:
+        data = self._load_canonical("observations.npz")
+        if data is not None:
+            return jnp.asarray(
+                data["observations"][num_observation - 1]
+            ).reshape(1, -1)
+        _, obs = self._generate_observation(num_observation)
+        return obs
+
+    def get_true_parameters(self, num_observation: int) -> jnp.ndarray:
+        data = self._load_canonical("observations.npz")
+        if data is not None:
+            return jnp.asarray(
+                data["true_parameters"][num_observation - 1]
+            ).reshape(1, -1)
+        theta_o, _ = self._generate_observation(num_observation)
+        return theta_o
+
+    def get_reference_posterior_samples(
+        self, num_observation: int
+    ) -> jnp.ndarray:
+        data = self._load_canonical("reference_posterior_samples.npz")
+        if data is not None:
+            return jnp.asarray(data["samples"][num_observation - 1])
+        raise FileNotFoundError(
+            f"No precomputed reference posterior for task "
+            f"{self.name!r} (nside={self.nside}, "
+            f"noise_std={self.noise_std}). Precomputed references ship "
+            f"only for the canonical noiseless nside 64/128 configs; "
+            f"use _sample_reference_posterior(...) to sample it live."
+        )
+
     def _sample_reference_posterior(
         self,
         key: jax.random.PRNGKey,
@@ -199,7 +253,24 @@ class SphericalGRF(Task):
         num_observation: Optional[int] = None,
         observation: Optional[jnp.ndarray] = None,
     ) -> jnp.ndarray:
-        raise NotImplementedError  # Task 4
+        assert (num_observation is None) != (observation is None), (
+            "Provide exactly one of num_observation or observation."
+        )
+        from sbibm_jax.tasks.spherical_grf.reference_posterior import (
+            sample_reference_posterior,
+        )
+        if observation is None:
+            observation = self.get_observation(num_observation)
+        samples, _ = sample_reference_posterior(
+            key,
+            observation,
+            nside=self.nside,
+            noise_std=self.noise_std,
+            low=self.prior_params["low"],
+            high=self.prior_params["high"],
+            num_samples=num_samples,
+        )
+        return samples
 
     def unflatten_data(self, data: jnp.ndarray) -> jnp.ndarray:
         return data.reshape(-1, self.npix)
