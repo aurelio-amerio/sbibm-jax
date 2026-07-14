@@ -14,8 +14,10 @@ docs/superpowers/specs/2026-07-14-spherical-grf-task-design.md
 from pathlib import Path
 from typing import Optional
 
+import healpy as hp
 import jax
 import jax.numpy as jnp
+import numpy as np
 import numpyro.distributions as dist
 
 from sbibm_jax.tasks.simulator import Simulator
@@ -128,10 +130,60 @@ class SphericalGRF(Task):
     ) -> jnp.ndarray:
         return self.prior_dist.sample(key, (num_samples,))
 
+    def _seed_words(self, subkey) -> np.ndarray:
+        """uint32 words of a JAX key, for seeding NumPy RNGs."""
+        return np.asarray(
+            jax.random.key_data(subkey), dtype=np.uint32
+        ).ravel()
+
+    def _simulate_one_np(self, subkey, theta_np: np.ndarray) -> np.ndarray:
+        """One RING map (npix,) float32 via healpy, seeded from subkey."""
+        words = self._seed_words(subkey)
+        cl = np.asarray(
+            cl_target(jnp.asarray(theta_np), self.lmax, self.ell0),
+            dtype=np.float64,
+        )
+        # healpy's synfast draws from NumPy's *global* RNG (no rng arg),
+        # so seed it per row. Not thread-safe; consumers use process
+        # workers (grain spawn), never threads.
+        np.random.seed(words)
+        m = hp.synfast(cl, self.nside, lmax=self.lmax, new=True)
+        if self.noise_std > 0:
+            rng = np.random.default_rng(
+                np.concatenate([words, np.uint32([0x5EED])])
+            )
+            m = m + self.noise_std * rng.standard_normal(m.shape)
+        return m.astype(np.float32)
+
+    def _healpy_simulator(self):
+        """Batch simulator closure on the healpy backend.
+
+        Used by get_simulator(backend="healpy") and — always, whatever
+        self.backend is — for observation generation, so observed maps
+        are backend-independent.
+        """
+        def simulator(key, parameters):
+            params_np = np.asarray(parameters)
+            keys = jax.random.split(key, params_np.shape[0])
+            maps = np.empty(
+                (params_np.shape[0], self.npix), dtype=np.float32
+            )
+            for i in range(params_np.shape[0]):
+                maps[i] = self._simulate_one_np(keys[i], params_np[i])
+            return jnp.asarray(maps)
+
+        return simulator
+
     def get_simulator(
         self, key: jax.random.PRNGKey, max_calls: Optional[int] = None
     ) -> Simulator:
-        raise NotImplementedError  # Task 2
+        if self.backend == "jax":
+            raise NotImplementedError  # Task 3
+        return Simulator(
+            task=self,
+            simulator=self._healpy_simulator(),
+            max_calls=max_calls,
+        )
 
     def _sample_reference_posterior(
         self,
