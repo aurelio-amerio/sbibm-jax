@@ -1,21 +1,22 @@
 {
-    "gaussian_random_field_256": {
-        "x_kind": "image",
+    "spherical_grf": {
+        "x_kind": "healpix",
         "x_shape": [
-            256,
-            256
+            49152
         ],
         "theta_kind": "vector",
         "theta_shape": [
-            2
+            3
         ],
         "splits": {
             "train": 100000,
             "validation": 10000,
             "test": 10000
         },
-        "has_reference": false,
+        "has_reference": true,
         "num_observations": 10,
-        "stats": null
+        "stats": null,
+        "nside": 64,
+        "ordering": "ring"
     }
 }
