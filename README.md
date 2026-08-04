@@ -80,6 +80,8 @@ posterior = ds.get_reference(num_observation=1)
 
 `kind="joint"` concatenates `(theta, x)` along the feature axis; `get_val_loader` / `get_test_loader` serve the validation and test splits.
 
+Both loaders read the production Hub repo (`aurelio-amerio/SBI-benchmarks`) by default. Pass `repo="..."` for any other repo, or export `SBIBM_JAX_USE_TEST=1` to point the defaults at the staging repo (`aurelio-amerio/SBI-benchmarks-test`).
+
 ### 3. Online datasets (simulate on the fly)
 
 `OnlineTaskDataset` reads the same `metadata.json` (shapes + normalization stats) but draws fresh `(theta, x)` from the task's prior and simulator each batch — the splits are never downloaded. Finite-simulator, vector-`theta` tasks only:
@@ -89,7 +91,6 @@ from sbibm_jax.data import OnlineTaskDataset
 
 ds = OnlineTaskDataset(
     "two_moons",
-    repo="aurelio-amerio/SBI-benchmarks",
     normalize=True,
 )
 

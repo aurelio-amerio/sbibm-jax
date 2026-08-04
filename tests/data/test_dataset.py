@@ -92,10 +92,23 @@ class TestConstruction:
         assert tuple(ds.theta_shape) == (2,)
         assert np.array(ds.theta_mean).shape == (1, 2)
 
-    def test_default_repo_is_test(self, patched):
+    def test_default_repo_is_production(self, patched, monkeypatch):
         from sbibm_jax.data import TaskDataset
+        monkeypatch.delenv(config.USE_TEST_ENV_VAR, raising=False)
+        ds = TaskDataset("two_moons")
+        assert ds.repo == config.DEFAULT_REPO
+
+    def test_env_flag_selects_test_repo(self, patched, monkeypatch):
+        from sbibm_jax.data import TaskDataset
+        monkeypatch.setenv(config.USE_TEST_ENV_VAR, "1")
         ds = TaskDataset("two_moons")
         assert ds.repo == config.TEST_REPO
+
+    def test_explicit_repo_wins_over_env(self, patched, monkeypatch):
+        from sbibm_jax.data import TaskDataset
+        monkeypatch.setenv(config.USE_TEST_ENV_VAR, "1")
+        ds = TaskDataset("two_moons", repo="someone/else")
+        assert ds.repo == "someone/else"
 
     def test_joint_sets_dim_joint(self, patched):
         from sbibm_jax.data import TaskDataset

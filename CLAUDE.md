@@ -54,9 +54,9 @@ uv run python scripts/make_dataset.py --all            # every task -> TEST repo
 uv run python scripts/make_dataset.py --all --prod     # every task -> PRODUCTION repo
 ```
 
-Uploads target the **test** repo (`config.TEST_REPO`) by default; pass `--prod`
-to target production (`config.DEFAULT_REPO`). Each run prints a `Target repo: …
-(TEST|PRODUCTION)` banner. Subset uploads are non-destructive: the remote
+Uploads (write path only) target the **test** repo (`config.TEST_REPO`) by
+default; pass `--prod` to target production (`config.DEFAULT_REPO`). Each run
+prints a `Target repo: … (TEST|PRODUCTION)` banner. Subset uploads are non-destructive: the remote
 `metadata.json` is fetched and merged so untouched tasks are preserved, and the
 local `metadata.json` is deleted after a successful real upload.
 
@@ -164,8 +164,13 @@ import-guard pattern as `hf` (informative ImportError → `pip install
 sbibm-jax[loader]`). `from sbibm_jax.data import TaskDataset` loads an
 SBI-benchmarks task straight from the Hub. It is driven *entirely* by the
 published `metadata.json` (x_kind/x_shape, theta_kind/theta_shape, splits, stats) — no
-per-task code. The default repo is the **TEST** repo (`config.TEST_REPO`); pass
-`repo=config.DEFAULT_REPO` for production. `kind="conditional"` serves
+per-task code. The default repo is **production** (`config.DEFAULT_REPO`),
+resolved at construction time via `config.get_default_repo()`: setting the env
+var `SBIBM_JAX_USE_TEST` to a truthy value (`1`/`true`/`yes`/`on`; anything
+unrecognized raises) flips the default to `config.TEST_REPO`, and an explicit
+`repo=` argument always wins. The `--prod` upload flag in `make_dataset.py` /
+`make_gw_dataset.py` is unchanged — the write path still defaults to TEST and
+ignores the env var. `kind="conditional"` serves
 `(theta, x)`; `kind="joint"` concatenates them along the feature axis
 (vector-only). Both reproduce GenSBI's tokenization (each scalar feature → a
 length-1 token via a trailing `[..., None]`); `normalize=True` applies the

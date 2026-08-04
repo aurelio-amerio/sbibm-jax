@@ -29,6 +29,38 @@ def test_test_repo_constant():
     assert config.DEFAULT_REPO == "aurelio-amerio/SBI-benchmarks"
 
 
+def test_default_repo_helper_prefers_production(monkeypatch):
+    from sbibm_jax.hf import config
+
+    monkeypatch.delenv(config.USE_TEST_ENV_VAR, raising=False)
+    assert config.use_test_repo() is False
+    assert config.get_default_repo() == config.DEFAULT_REPO
+
+
+def test_default_repo_helper_honors_env_flag(monkeypatch):
+    from sbibm_jax.hf import config
+
+    for truthy in ("1", "true", "TRUE", " yes ", "on"):
+        monkeypatch.setenv(config.USE_TEST_ENV_VAR, truthy)
+        assert config.use_test_repo() is True
+        assert config.get_default_repo() == config.TEST_REPO
+
+    for falsy in ("", "0", "false", "no", "off"):
+        monkeypatch.setenv(config.USE_TEST_ENV_VAR, falsy)
+        assert config.use_test_repo() is False
+        assert config.get_default_repo() == config.DEFAULT_REPO
+
+
+def test_default_repo_helper_rejects_garbage(monkeypatch):
+    import pytest
+
+    from sbibm_jax.hf import config
+
+    monkeypatch.setenv(config.USE_TEST_ENV_VAR, "maybe")
+    with pytest.raises(ValueError, match=config.USE_TEST_ENV_VAR):
+        config.get_default_repo()
+
+
 def test_new_helpers_reexported():
     import sbibm_jax.hf as hf
 

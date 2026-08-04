@@ -3,7 +3,8 @@
 
 Driven entirely by the published metadata.json (x_kind/x_shape,
 theta_kind/theta_shape, splits, stats) — no per-task code. Default repo is the
-TEST repo (config.TEST_REPO); pass repo=config.DEFAULT_REPO for production.
+production repo (config.DEFAULT_REPO); set SBIBM_JAX_USE_TEST=1 in the
+environment (or pass repo=config.TEST_REPO) to read the test repo instead.
 """
 
 import json
@@ -45,7 +46,7 @@ class TaskDataset:
     ):
         self.name = name
         self.kind = kind
-        self.repo = repo if repo is not None else config.TEST_REPO
+        self.repo = repo if repo is not None else config.get_default_repo()
         self.normalize = normalize
         self.dtype = dtype
         self.seed = seed
@@ -332,7 +333,7 @@ class OnlineTaskDataset(TaskDataset):
     ):
         self.name = name
         self.kind = kind
-        self.repo = repo if repo is not None else config.TEST_REPO
+        self.repo = repo if repo is not None else config.get_default_repo()
         self.normalize = normalize
         self.dtype = dtype
         self.seed = seed
