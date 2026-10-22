@@ -22,6 +22,27 @@ from sbibm_jax.tasks import get_task
 
 _MAX_WORKERS_CAP = 8  # shared node; never exceed (see CLAUDE.md / memory).
 
+_GRAIN_PROFILER_FLAG = "grain_enable_multiprocess_worker_profiling"
+
+
+def _guard_grain_profiler_flag():
+    """Let grain read its worker-profiling absl flag in a non-absl process.
+
+    grain 0.2.18 (``grain/_src/core/profiler.py``) reads
+    ``--grain_enable_multiprocess_worker_profiling`` inside ``mp_prefetch``
+    whenever ``jaxlib_extension_version >= 448`` (jax >= 0.11). absl raises
+    ``UnparsedFlagAccessError`` on that read in any process that never called
+    ``absl.app.run()`` -- pytest, scripts, notebooks -- so prefetching dies.
+    Marking the single flag as present makes absl return its default, which is
+    the same trick grain uses for its own debug flags. grain main already
+    guards the read; this becomes a no-op once that ships.
+    """
+    from absl import flags
+
+    if flags.FLAGS.is_parsed() or _GRAIN_PROFILER_FLAG not in flags.FLAGS:
+        return
+    flags.FLAGS[_GRAIN_PROFILER_FLAG].present = True
+
 
 def _healpix_nest_perm(nside: int):
     """Index array p with map_nest = map_ring[p]."""
@@ -154,6 +175,7 @@ class TaskDataset:
                 ds=pipe, ram_budget_mb=1024, max_workers=self.max_workers,
                 max_buffer_size=None,
             )
+            _guard_grain_profiler_flag()
             pipe = pipe.mp_prefetch(cfg.multiprocessing_options)
         return pipe
 
@@ -426,6 +448,7 @@ class OnlineTaskDataset(TaskDataset):
             self.task, self.simulator, seed, batch_size, x_shape=self.x_shape,
         )
         if num_workers > 0:
+            _guard_grain_profiler_flag()
             ds = ds.mp_prefetch(
                 grain.MultiprocessingOptions(num_workers=num_workers),
                 worker_init_fn=_worker_init,
