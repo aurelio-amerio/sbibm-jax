@@ -306,11 +306,26 @@ class TestGrainProfilerFlagGuard:
         # grain 0.2.18 reads --grain_enable_multiprocess_worker_profiling as soon
         # as jaxlib_extension_version >= 448 (jax >= 0.11); absl raises
         # UnparsedFlagAccessError in any process that never ran absl.app.run()
-        # (pytest, scripts, notebooks), which kills mp_prefetch. The guard must
-        # make that read succeed and yield the flag's default (False).
+        # (pytest, scripts, notebooks), which kills mp_prefetch. absl flag state
+        # is process-global and sticky, so reset the flag first to prove the
+        # failure mode exists, then prove the guard removes it.
+        from absl import flags
         from grain._src.core import profiler
 
-        from sbibm_jax.data.dataset import _guard_grain_profiler_flag
+        from sbibm_jax.data.dataset import _GRAIN_PROFILER_FLAG, _guard_grain_profiler_flag
 
-        _guard_grain_profiler_flag()
-        assert profiler.is_worker_profiling_enabled() is False
+        if not profiler.is_worker_profiling_supported():
+            pytest.skip("jax < 0.11: grain never reads the flag")
+        if flags.FLAGS.is_parsed() or _GRAIN_PROFILER_FLAG not in flags.FLAGS:
+            pytest.skip("absl flags parsed / grain flag absent: guard is a no-op")
+
+        flag = flags.FLAGS[_GRAIN_PROFILER_FLAG]
+        saved = flag.present
+        flag.present = 0
+        try:
+            with pytest.raises(flags.UnparsedFlagAccessError):
+                profiler.is_worker_profiling_enabled()
+            _guard_grain_profiler_flag()
+            assert profiler.is_worker_profiling_enabled() is False
+        finally:
+            flag.present = saved or True
