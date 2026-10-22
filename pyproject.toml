@@ -45,7 +45,7 @@ hf = [
 loader = [
     "datasets>=2.20.0",
     "huggingface_hub>=0.24.0",
-    "grain>=0.2.15",
+    "grain>=0.2.18",
 ]
 jaxhp = [
     "jax-healpy",
@@ -94,7 +94,7 @@ hf = [
 loader = [
     "datasets>=2.20.0",
     "huggingface_hub>=0.24.0",
-    "grain>=0.2.15",
+    "grain>=0.2.18",
 ]
 jaxhp = [
     "jax-healpy",
